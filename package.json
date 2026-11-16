@@ -2,6 +2,7 @@
   "name": "dsh-music",
   "description": "Your own music, in step with the AI: lyrics in the running indicator, volume that steps back while the AI waits for you",
   "version": "0.1.0",
+  "icon": "./icon.svg",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -11,6 +12,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
+    "icon.svg",
     "lib/index.js",
     "lib/lyrics.js",
     "lib/ncm.js",
