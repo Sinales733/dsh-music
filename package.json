@@ -1,0 +1,49 @@
+{
+  "name": "dsh-music",
+  "description": "Your own music, in step with the AI: lyrics in the running indicator, volume that steps back while the AI waits for you",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/lyrics.js",
+    "lib/ncm.js",
+    "lib/mood.js",
+    "lib/songs.js",
+    "lib/bridge.ps1",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sinales733/dsh-music.git"
+  },
+  "homepage": "https://github.com/Sinales733/dsh-music",
+  "os": [
+    "win32"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

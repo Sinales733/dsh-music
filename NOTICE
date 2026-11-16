@@ -1,0 +1,39 @@
+dsh-music
+Copyright (c) 2026 Sinales733. Licensed under the MIT License.
+
+This product includes code adapted from the following projects.
+
+lx-music-desktop — https://github.com/lyswhut/lx-music-desktop
+  Copyright lyswhut. Licensed under the Apache License, Version 2.0.
+  Used in src/host/lyrics.js: NetEase Cloud Music eapi request encryption (itself from
+  NeteaseCloudMusicApi, MIT), NetEase and QQ Music search / lyric requests, QQ Music request
+  signing, and the QRC lyric decoder (3DES variant + zlib). Changed: rewritten into one module,
+  unrolled bit permutations folded into loops, parsed straight into a timed line/word model.
+
+Lyricify Lyrics Helper — https://github.com/WXRIW/Lyricify-Lyrics-Helper
+  Copyright WXRIW (XY Wang). Licensed under the Apache License, Version 2.0.
+  Used in src/host/lyrics.js: the track-matching scores (CompareHelper: name, artist, album and
+  duration matching, text similarity). Changed: ported from C# to JavaScript, condensed.
+
+Lyricify Backgrounds — https://github.com/WXRIW/Lyricify-Backgrounds
+  Copyright WXRIW (XY Wang). Licensed under the Apache License, Version 2.0.
+  Used in src/client/backdrop.js: the Apple Music-inspired background material (three cover
+  layers with their scales, offsets and turn periods, blurred together, saturation-treated).
+  Changed: re-implemented with Canvas 2D drawing and filters instead of Direct3D shaders.
+
+DeepSeek Harness — https://github.com/deepseek-ai/deepseek-harness
+  Copyright DeepSeek. Licensed under the MIT License.
+  Used in src/client/music.js: the TextShimmer highlight styles (dsh-client-ui-primitives) and the
+  statistics pill metrics (dsh-client-ui-chat), reproduced so the lyric matches DSH's own labels.
+
+dsh-motion — https://github.com/Sinales733/dsh-whale/tree/main/motion
+  Copyright (c) 2026 Sinales733. Licensed under the MIT License.
+  Used in src/client/vendor/rig-model.js and surface.js (the whale-tail rig and its drawing) and
+  src/client/vendor/sway-frames.js (the "turn" frames, which dsh-motion takes from DeepSeek
+  Harness's official animation; those frames belong to their authors).
+
+NAudio — https://github.com/naudio/NAudio
+  Copyright Mark Heath and contributors. Licensed under the MIT License.
+  Used in src/host/bridge.ps1: the Core Audio COM interface layouts for per-application volume.
+
+The Apache License, Version 2.0 is available at https://www.apache.org/licenses/LICENSE-2.0
