@@ -557,7 +557,7 @@ function createMusic(remote, t) {
 
   // ------------------------------------------------------------------ lifetime
   const style = document.createElement('style');
-  style.dataset.plugin = 'dsh-music';
+  style.dataset.plugin = 'dsh-whale-music';
   style.textContent = CSS;
   document.head.append(style);
   if (carried) {
@@ -624,9 +624,9 @@ async function apply(ctx) {
     const music = createMusic(child.remote, t);
     child.effect(() => music.stop, 'dsh-music: lyrics');
     child.slots.inject('conversation.composer.dock', () => child.slots.register(
-      { name: 'conversation.composer.dock', id: 'dsh-music', order: -1 }, music.Strip));
+      { name: 'conversation.composer.dock', id: 'dsh-whale-music', order: -1 }, music.Strip));
     child.slots.inject('plugins.bundle.config', () => child.slots.register(
-      { name: 'plugins.bundle.config', key: 'dsh-music' }, music.Settings));
+      { name: 'plugins.bundle.config', key: 'dsh-whale-music' }, music.Settings));
   });
   try { await ui; } catch (error) { await ui.dispose?.(); await unmount(); throw error; }
   return async () => { await ui.dispose?.(); await unmount(); };

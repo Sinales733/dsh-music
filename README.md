@@ -14,8 +14,8 @@ A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
   **Context usage as a glowing line**: while the lyric shows, the context-usage ring unwinds into a glowing line along the bottom edge of the composer, as long as the share used.
 - **封面背景**：整个窗口底下铺着缓缓流动的封面颜色，侧栏变成半透明。暂停时慢慢停住，跟着深色 / 浅色主题走。
   **Cover background**: the cover's colours flow slowly behind the whole window and the sidebar turns translucent. It eases to a stop when the music pauses and follows the dark or light theme.
-- **鲸尾跟着鼓点**：运行指示器里的鲸尾按歌曲的节拍摆动；节奏强烈的歌改成「转身」，每拍转一个来回。装了 [dsh-motion](https://github.com/Sinales733/dsh-whale/tree/main/motion) 时由它来画，没装时直接画在 DSH 原来的图标上。
-  **A whale tail on the beat**: the tail in the running indicator moves to the song's beat; lively songs get a full turn on every beat instead. With [dsh-motion](https://github.com/Sinales733/dsh-whale/tree/main/motion) installed it draws the tail; without it, the tail is drawn over DSH's own icon.
+- **鲸尾跟着鼓点**：运行指示器里的鲸尾按歌曲的节拍摆动；节奏强烈的歌改成「转身」，每拍转一个来回。装了 [dsh-motion](https://github.com/Sinales733/dsh-motion) 时由它来画，没装时直接画在 DSH 原来的图标上。
+  **A whale tail on the beat**: the tail in the running indicator moves to the song's beat; lively songs get a full turn on every beat instead. With [dsh-motion](https://github.com/Sinales733/dsh-motion) installed it draws the tail; without it, the tail is drawn over DSH's own icon.
 - **等你批准时调小音量**：AI 停下来等你批准操作时，播放器的音量降下来，你点完就恢复。只动播放器自己在 Windows 音量合成器里的音量；降着的时候你自己调了音量，就按你调的来。
   **Volume steps back while the AI waits for you**: when the AI stops to ask for your approval, the player's volume goes down, and comes back once you answer. Only the player's own volume in the Windows volume mixer is touched; if you change it yourself meanwhile, your setting stays.
 
@@ -35,21 +35,27 @@ Every transition follows the music: things animate when a song starts, pauses or
 ## 安装 / Install
 
 ```bash
+dsh plugin --profile desktop add dsh-whale-music
+```
+
+npm 上的包名是 `dsh-whale-music`（`dsh-music` 这个名字在 npm 上已被别人占用）。也可以从源码安装：
+
+```bash
 git clone https://github.com/Sinales733/dsh-music.git
 dsh plugin --profile desktop add link:/path/to/dsh-music
 ```
 
-桌面版的 `dsh` 在安装目录下的 `resources/runtime/cli/bin/dsh.cmd`。也可以下载 [Releases](https://github.com/Sinales733/dsh-music/releases) 里的 `.tgz` 包，解压后用 `link:<解压目录>/package` 添加。装好后刷新 DSH 窗口。
+桌面版的 `dsh` 在安装目录下的 `resources/runtime/cli/bin/dsh.cmd`；网页版把 `desktop` 换成 `web`。也可以下载 [Releases](https://github.com/Sinales733/dsh-music/releases) 里的 `.tgz` 包，解压后用 `link:<解压目录>/package` 添加。装好后刷新 DSH 窗口。
 
-The desktop `dsh` is `resources/runtime/cli/bin/dsh.cmd` in the install folder. You can also download the `.tgz` from [Releases](https://github.com/Sinales733/dsh-music/releases), unpack it and add `link:<folder>/package` the same way. Reload the DSH window afterwards.
+On npm the package is `dsh-whale-music` (the name `dsh-music` is taken there). Install it with `dsh plugin --profile desktop add dsh-whale-music` (`--profile web` for the web app), link a clone of this repository, or unpack the `.tgz` from [Releases](https://github.com/Sinales733/dsh-music/releases) and add `link:<folder>/package`. The desktop `dsh` is `resources/runtime/cli/bin/dsh.cmd` in the install folder. Reload the DSH window afterwards.
 
-卸载 / Uninstall：`dsh plugin --profile desktop remove dsh-music`，刷新窗口后一切恢复原样。Reload the window and everything is as it was.
+卸载 / Uninstall：`dsh plugin --profile desktop remove dsh-whale-music`，刷新窗口后一切恢复原样。Reload the window and everything is as it was.
 
 ## 设置 / Settings
 
-在 DSH 的插件管理里打开 dsh-music 的页面。
+在 DSH 的插件管理里打开 dsh-whale-music 的页面。
 
-Open dsh-music's page in DSH's plugin manager.
+Open dsh-whale-music's page in DSH's plugin manager.
 
 | 设置 / Setting | 说明 / What it does |
 |---|---|
@@ -75,6 +81,6 @@ The source is in `src/`: `src/host/` runs in DSH's main process (players, lyrics
 
 ## 致谢与许可 / Credits & License
 
-插件代码采用 [MIT License](LICENSE)。改写自其他项目的部分（lx-music-desktop、Lyricify、DeepSeek Harness、NAudio）及其许可见 [NOTICE](NOTICE)。鲸尾的骨架和动画帧来自 [dsh-motion](https://github.com/Sinales733/dsh-whale/tree/main/motion)，其中「转身」帧取自 DeepSeek Harness 的官方动画，版权归原作者所有。
+插件代码采用 [MIT License](LICENSE)。改写自其他项目的部分（lx-music-desktop、Lyricify、DeepSeek Harness、NAudio）及其许可见 [NOTICE](NOTICE)。鲸尾的骨架和动画帧来自 [dsh-motion](https://github.com/Sinales733/dsh-motion)，其中「转身」帧取自 DeepSeek Harness 的官方动画，版权归原作者所有。
 
-The plugin code is under the [MIT License](LICENSE). Parts adapted from other projects (lx-music-desktop, Lyricify, DeepSeek Harness, NAudio) and their licenses are listed in [NOTICE](NOTICE). The whale-tail rig and frames come from [dsh-motion](https://github.com/Sinales733/dsh-whale/tree/main/motion); the "turn" frames are taken from DeepSeek Harness's official animation and belong to their authors.
+The plugin code is under the [MIT License](LICENSE). Parts adapted from other projects (lx-music-desktop, Lyricify, DeepSeek Harness, NAudio) and their licenses are listed in [NOTICE](NOTICE). The whale-tail rig and frames come from [dsh-motion](https://github.com/Sinales733/dsh-motion); the "turn" frames are taken from DeepSeek Harness's official animation and belong to their authors.

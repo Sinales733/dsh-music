@@ -88,7 +88,7 @@ function createTail(wanted, mood = () => null, carried = null) {
   const own = new Map();            // icon host -> { canvas, ctx }
   let raf = 0, last = 0;
   const style = document.createElement('style');
-  style.dataset.plugin = 'dsh-music';
+  style.dataset.plugin = 'dsh-whale-music';
   style.textContent = TAIL_CSS;
   document.head.append(style);
 

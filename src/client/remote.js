@@ -3,7 +3,7 @@
 // ctx.remote.$mount(). Stream items and results are plain JSON, so the result codecs only accept anything.
 const zod = require('zod');
 
-const PKG = 'dsh-music';
+const PKG = 'dsh-whale-music';
 const anyResult = (endpoint, description) => ({ mode: 'strict', typeSymbol: `${PKG}#${endpoint}:result`, create: () => zod.z.unknown(), description, jsonSchema: {} });
 const stringParam = (endpoint, name, description) => {
   const codec = { mode: 'strict', typeSymbol: `${PKG}#${endpoint}:${name}`, create: () => zod.z.string(), jsonSchema: { type: 'string' } };
