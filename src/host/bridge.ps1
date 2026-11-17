@@ -330,9 +330,16 @@ function PollMedia {
     }
     $p = Await ($s.TryGetMediaPropertiesAsync()) $propType
     $tl = $s.GetTimelineProperties()
-    $status = [string]$s.GetPlaybackInfo().PlaybackStatus
+    $info = $s.GetPlaybackInfo()
+    $status = [string]$info.PlaybackStatus
+    # What the player lets others do: skip either way, and (Spotify, not NetEase) shuffle and repeat, with their states;
+    # $null where the player does not offer it.
+    $ctl = $info.Controls
+    $shuffle = if ($ctl.IsShuffleEnabled -and $null -ne $info.IsShuffleActive) { [bool]$info.IsShuffleActive } else { $null }
+    $repeat = if ($ctl.IsRepeatEnabled -and $null -ne $info.AutoRepeatMode) { [string]$info.AutoRepeatMode } else { $null }
+    $can = "$([bool]$ctl.IsNextEnabled)|$([bool]$ctl.IsPreviousEnabled)|$([bool]$ctl.IsPlaybackPositionEnabled)|$shuffle|$repeat"
     $track = "$($s.SourceAppUserModelId)|$($p.Title)|$($p.Artist)|$($p.AlbumTitle)"
-    $key = "$track|$status|$($tl.LastUpdatedTime.Ticks)|$($tl.EndTime.Ticks)"
+    $key = "$track|$status|$($tl.LastUpdatedTime.Ticks)|$($tl.EndTime.Ticks)|$can"
     if ($track -ne $script:trackKey) { $script:trackKey = $track; $script:coverTries = 4; $script:coverHash = '' }
     if ($key -ne $script:mediaKey) {
         $script:mediaKey = $key
@@ -340,6 +347,7 @@ function PollMedia {
             t = 'media'; app = $s.SourceAppUserModelId; exe = ExeOf $s.SourceAppUserModelId; title = $p.Title; artist = $p.Artist; album = $p.AlbumTitle
             status = $status; dur = [long]$tl.EndTime.TotalMilliseconds; pos = [long]$tl.Position.TotalMilliseconds
             at = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
+            next = [bool]$ctl.IsNextEnabled; prev = [bool]$ctl.IsPreviousEnabled; seek = [bool]$ctl.IsPlaybackPositionEnabled; shuffle = $shuffle; repeat = $repeat
         }
     }
     # Players often publish the artwork a moment after the title, so look a few times after a track change.
@@ -373,6 +381,24 @@ function Control($cmd) {
         'next' { $s.TrySkipNextAsync() } 'prev' { $s.TrySkipPreviousAsync() }
     }
     if ($op) { [void](Await $op ([bool])) }
+}
+# Jump to a place in the song (ms), where the player allows it.
+function Seek($ms) {
+    $s = $script:session
+    if (-not $s) { $s = PickSession }
+    if (-not $s) { return }
+    [void](Await ($s.TryChangePlaybackPositionAsync([long]([double]$ms * 10000))) ([bool]))
+    $script:mediaKey = ''
+}
+# The play mode, as far as the player takes it from outside: shuffle on or off, repeat None / Track / List.
+$repeatType = [Windows.Media.MediaPlaybackAutoRepeatMode, Windows.Media, ContentType = WindowsRuntime]
+function SetMode($m) {
+    $s = $script:session
+    if (-not $s) { $s = PickSession }
+    if (-not $s) { return }
+    if ($null -ne $m.shuffle) { [void](Await ($s.TryChangeShuffleActiveAsync([bool]$m.shuffle)) ([bool])) }
+    if ($m.repeat) { [void](Await ($s.TryChangeAutoRepeatModeAsync([Enum]::Parse($repeatType, [string]$m.repeat))) ([bool])) }
+    $script:mediaKey = ''   # report the new mode at the next look
 }
 
 # ---------------------------------------------------------------- per-process volume fades
@@ -494,6 +520,8 @@ try {
                         try { Start-Process -FilePath $m.path -ErrorAction Stop; Emit @{ t = 'launched'; ok = $true } }
                         catch { Emit @{ t = 'launched'; ok = $false; m = $_.Exception.Message } }
                     }
+                    'mode' { SetMode $m }
+                    'seek' { Seek $m.ms }
                     default { Control $m.c }
                 }
                 if ($m.c -eq 'quit') { break }

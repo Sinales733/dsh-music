@@ -1,2 +1,4 @@
 node_modules/
 *.tgz
+promo/stills/
+promo/*.video.mp4

@@ -8,8 +8,10 @@ A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 
 - **运行指示器里的歌词**：AI 干活时，「Deep diving …」换成正在唱的那句，唱到哪个字亮到哪个字，用的是 DSH 自己的扫光样式。间奏里留着上一句，长间奏才换回原来的文字。
   **Lyrics in the running indicator**: while the AI works, "Deep diving …" becomes the line being sung, lighting up word by word in DSH's own shimmer style. The line stays through short breaks; DSH's label comes back only in long instrumentals.
-- **输入框下那一栏**：显示小封面和当前歌词（外文歌带翻译）；鼠标移上去换回 DSH 原来的统计，旁边有播放 / 暂停键。没在放歌时只有一个 ▶，点一下打开上次用的播放器并开始播放。
-  **The row under the composer**: a small cover and the current line (with a translation for songs in other languages). Hover it to get DSH's own readings back, with a play/pause button. With nothing playing there is just a ▶, which opens the player you used last and starts it.
+- **输入框下那一栏**：显示小封面和当前歌词（外文歌带翻译），换句、换歌时宽度平滑过渡。鼠标移上去换回 DSH 原来的统计，旁边是一个封面小胶囊：播放 / 暂停键叠在小封面上，封面后面一排竖线跟着节拍跳，点一下播放或暂停。在胶囊上滚动滚轮切歌（往下是下一首，往上是上一首），鼠标停在胶囊上时，它两端有很淡的左右箭头提示，小封面朝切换的方向滑走。没在放歌时只有一个 ▶，点一下打开上次用的播放器并开始播放。
+  **The row under the composer**: a small cover and the current line (with a translation for songs in other languages), gliding to its new width when the line or the song changes. Hover it to get DSH's own readings back, with a cover capsule: the play / pause button lies on the small cover, bars after it move with the beat, and a click plays or pauses. Scroll on the capsule to skip (down: next, up: previous); faint chevrons at its ends say so while the pointer is on it, and its cover slides the way the song went. With nothing playing there is just a ▶, which opens the player you used last and starts it.
+- **跟着音乐的光**：新会话里，输入框边缘一圈细光跟着节拍亮。发出第一条消息时，输入框滑到底部，光圈从顶部正中断开、沿两侧退下去，把歌词带出来；同时窗口下边沿亮起，沿着窗口边框绕满一圈，之后整个窗口边缘跟着节拍轻轻发亮。暂停时慢慢熄灭，回到新会话时原路收回。光的颜色取自封面。
+  **Light with the music**: in a new session a thin ring of light along the composer brightens on each beat. On your first message the composer glides down, the ring opens at the top and draws back down both sides, bringing the lyric in, while the window's bottom edge lights and the light runs round the whole window; then the window's edge glows softly with the beat. It fades when the music pauses and draws back when you start a new session. Its colour comes from the cover.
 - **上下文占用变成发光线**：歌词显示时，上下文占用的小圆圈抽成一条发光线，贴在输入框下沿，长度就是占用比例。
   **Context usage as a glowing line**: while the lyric shows, the context-usage ring unwinds into a glowing line along the bottom edge of the composer, as long as the share used.
 - **封面背景**：整个窗口底下铺着缓缓流动的封面颜色，侧栏变成半透明。暂停时慢慢停住，跟着深色 / 浅色主题走。
@@ -60,6 +62,7 @@ Open dsh-whale-music's page in DSH's plugin manager.
 | 设置 / Setting | 说明 / What it does |
 |---|---|
 | 封面背景 / Cover background | 关、淡、中、浓 / off, light, medium, strong |
+| 窗口边缘光 / Window edge light | 对话时窗口边缘跟着节拍发亮，可以关掉 / the window's edge glowing with the beat in a conversation; can be turned off |
 | 等你批准时的音量 / Volume while waiting for approval | 30%、50%（默认 / default）、70% |
 | 跟鼓点 / Follow the beat | 鲸尾和背景跟着重拍动 / the tail and the background move with the kick |
 | 歌词快慢 / Lyric timing | 每个播放器单独调，单位毫秒，正数让歌词提前 / per player, in milliseconds; positive shows lyrics earlier |

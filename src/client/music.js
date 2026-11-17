@@ -26,7 +26,7 @@ const CSS = `
 /* Shown again as it was (DSH rebuilt the indicator or the composer row while the music went on): no fades. */
 [data-dshmu-still] [class*="runningText"], [data-dshmu-still] .dshmu-ts, [data-dshmu-still] .dshmu-ts *,
 [data-composer-dock][data-dshmu-still] > *, [data-composer-dock][data-dshmu-still] > [data-slot] > *, [data-dshmu-still] .dshmu-strip * { transition: none !important; }
-[data-dshmu-still] .dshmu-enter, [data-dshmu-still] .dshmu-in { animation: none !important; }
+[data-dshmu-still] .dshmu-enter, [data-dshmu-still] .dshmu-in, [data-dshmu-still] .dshmu-from-r, [data-dshmu-still] .dshmu-from-l { animation: none !important; }
 .dshmu-c { display: block; min-width: 0; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .dshmu-d { position: absolute; inset: 0; overflow: clip; pointer-events: none; user-select: none; }
 .dshmu-s { position: absolute; inset: 0; overflow: hidden; color: var(--dsw-alias-label-shimmer); mask-image: linear-gradient(105deg, transparent 0%, black 40% 60%, transparent 100%);
@@ -49,7 +49,59 @@ const CSS = `
 button.dshmu-pill { cursor: pointer; }
 @media (hover: hover) { button.dshmu-pill:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); } }
 .dshmu-pill svg { width: 12px; height: 12px; flex: none; }
-.dshmu-pp { padding: 1px 6px; min-height: calc(1lh + 2px); justify-content: center; }   /* an icon alone: as tall as the text pills beside it */
+/* The row's controls: the cover capsule (the song's artwork, beat bars after it while it plays) with the play / pause
+   button lying on the artwork, which dims under it: one round thing, playing or paused. A click on the capsule plays or
+   pauses too. With no player reporting at all, the play button alone starts the one used last. */
+.dshmu-ctrl { align-items: center; }
+.dshmu-ib { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; }
+@media (hover: hover) { .dshmu-ib:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); } }
+.dshmu-ib:disabled { opacity: .4; cursor: default; }
+.dshmu-ib svg { width: 12px; height: 12px; }
+.dshmu-ctrl > .dshmu-pp { position: relative; z-index: 1; margin-right: 4px;
+  transition: margin-right .3s cubic-bezier(.2, .8, .2, 1), color .2s ease, background-color .12s; }
+.dshmu-pp svg { transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+.dshmu-cap { display: inline-flex; align-items: center; height: 22px; padding: 0 3px; border: 0; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover);
+  color: inherit; font: inherit; cursor: pointer; transition: background-color .12s; }
+@media (hover: hover) { .dshmu-cap:hover { background: var(--dsw-alias-interactive-bg-hover-solid, var(--dsw-alias-interactive-bg-active)); color: var(--dsw-alias-label-secondary); } }
+.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]) { visibility: hidden; }
+/* Scrolling on the capsule skips songs (down: next, up: previous). Hovered, two faint chevrons just outside its ends
+   say so: drawn thin and dim, not as buttons, and they take no clicks. The one the wheel went toward flicks outward. */
+.dshmu-cap { position: relative; }
+.dshmu-cap-hint { position: absolute; top: 50%; width: 3px; height: 6px; margin-top: -3px; pointer-events: none; color: var(--dsw-alias-label-tertiary);
+  opacity: 0; transition: opacity .3s ease, transform .3s cubic-bezier(.2, .8, .2, 1); }
+.dshmu-cap-hint svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.dshmu-cap-hint[data-d="-1"] { left: -5px; transform: translateX(1.5px); }
+.dshmu-cap-hint[data-d="1"] { right: -6px; transform: translateX(-1.5px); }
+@media (hover: hover) { .dshmu-cap:hover .dshmu-cap-hint { opacity: .4; transform: none; } }
+.dshmu-cap .dshmu-cap-hint[data-flick] { opacity: .85; transition: opacity .08s ease, transform .08s ease; }
+.dshmu-cap .dshmu-cap-hint[data-flick][data-d="-1"] { transform: translateX(-1.5px); }
+.dshmu-cap .dshmu-cap-hint[data-flick][data-d="1"] { transform: translateX(1.5px); }
+.dshmu-cap-art { position: relative; display: grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 4px; overflow: hidden;
+  background: var(--dsw-alias-interactive-bg-hover); transition: filter .2s ease; }
+.dshmu-cap-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dshmu-cap-art svg { width: 11px; height: 11px; transition: opacity .2s; }
+.dshmu-cap-art:not([data-blank]) svg { display: none; }
+.dshmu-eq { display: inline-flex; align-items: center; gap: 2px; height: 12px; }
+.dshmu-eq i { flex: none; width: 2px; height: 3px; border-radius: 1px; background: currentColor; }
+.dshmu-cap .dshmu-eq { max-width: 0; margin: 0; opacity: 0; overflow: hidden;
+  transition: max-width .26s cubic-bezier(.2, .8, .2, 1), margin .26s cubic-bezier(.2, .8, .2, 1), opacity .16s ease; }
+.dshmu-strip[data-play="playing"] .dshmu-cap .dshmu-eq { max-width: 20px; margin: 0 5px 0 6px; opacity: 1; }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-pp { margin-right: -22px; color: #fff; }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-pp svg { transform: scale(.72); }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-pp:hover { background: transparent; }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-cap-art { filter: brightness(.62); }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-ctrl:has(> .dshmu-pp:hover) .dshmu-cap-art { filter: brightness(.45); }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-ctrl:has(.dshmu-cap-art[data-blank]) > .dshmu-pp { color: inherit; }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-cap-art[data-blank] { filter: none; }
+.dshmu-strip:not([data-play="none"]):not(:has(.dshmu-cap:is([aria-expanded="true"], [data-dshmu-landing]))) .dshmu-cap-art[data-blank] svg { opacity: 0; }
+.dshmu-strip[data-play="none"] .dshmu-cap { display: none; }
+.dshmu-strip[data-play="none"] .dshmu-pp { margin-right: 0; }
+/* a new song's first words come in from the side the song went */
+.dshmu-from-r { animation: dshmu-from-r .3s cubic-bezier(.2, .8, .2, 1); }
+.dshmu-from-l { animation: dshmu-from-l .3s cubic-bezier(.2, .8, .2, 1); }
+@keyframes dshmu-from-r { from { opacity: 0; transform: translateX(14px); } }
+@keyframes dshmu-from-l { from { opacity: 0; transform: translateX(-14px); } }
 .dshmu-cover { width: 14px; height: 14px; flex: none; border-radius: 3px; object-fit: cover; }
 .dshmu-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dshmu-in { animation: dshmu-fade 220ms ease-out; }
@@ -67,13 +119,15 @@ button.dshmu-pill { cursor: pointer; }
 [data-composer-dock]:has(.dshmu-strip[data-mode="lyric"]) { align-self: stretch; }
 .dshmu-strip > .dshmu-lyric { position: absolute; left: 50%; top: 4px; bottom: 0; translate: -50% 0; max-width: 100%; }
 [data-composer-dock]:has(.dshmu-strip) > :not([data-slot]), [data-composer-dock]:has(.dshmu-strip) > [data-slot] > :not(.dshmu-strip),
-.dshmu-strip > .dshmu-pp { transition: opacity .16s ease .06s, visibility 0s; }
-.dshmu-strip > .dshmu-lyric { opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s .12s; }
+.dshmu-strip > .dshmu-ctrl { transition: opacity .16s ease .06s, visibility 0s; }
+.dshmu-strip > .dshmu-lyric { opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s .12s, width .28s cubic-bezier(.2, .8, .2, 1); }
 [data-composer-dock]:not(:hover, :focus-within, :has([aria-expanded="true"])) > [data-slot] > .dshmu-strip[data-mode="lyric"] > .dshmu-lyric {
-  opacity: 1; visibility: visible; transition: opacity .16s ease .06s, visibility 0s; }
+  opacity: 1; visibility: visible; transition: opacity .16s ease .06s, visibility 0s, width .28s cubic-bezier(.2, .8, .2, 1); }
+/* While the lyric glides to the width of its new line (glideWidth), the text is cut off plainly rather than with "…" */
+.dshmu-lyric[data-dshmu-glide] .dshmu-line { text-overflow: clip; }
 [data-composer-dock]:has(.dshmu-strip[data-mode="lyric"]):not(:hover, :focus-within, :has([aria-expanded="true"])) > :not([data-slot]),
 [data-composer-dock]:has(.dshmu-strip[data-mode="lyric"]):not(:hover, :focus-within, :has([aria-expanded="true"])) > [data-slot] > :not(.dshmu-strip),
-[data-composer-dock]:not(:hover, :focus-within, :has([aria-expanded="true"])) > [data-slot] > .dshmu-strip[data-mode="lyric"] > .dshmu-pp {
+[data-composer-dock]:not(:hover, :focus-within, :has([aria-expanded="true"])) > [data-slot] > .dshmu-strip[data-mode="lyric"] > .dshmu-ctrl {
   opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s .12s; }
 /* The context line (ctxline.js) on the composer card's bottom edge; DSH's ring hides while ours is drawn */
 [data-dshmu-ctx-root] { position: relative; }
@@ -103,6 +157,79 @@ html[data-dshmu-bg] body > :has([data-shell-bottom]) {
 .dshmu-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .dshmu-bg .dshmu-veil { position: absolute; inset: 0; background: var(--dsw-alias-bg-base); opacity: calc(1 - var(--dshmu-bg-strength, .32)); transition: opacity .3s ease; }
 
+/* The player unfolded from the capsule (island.js): laid out in the window, over the page. The frame grows from the
+   capsule to the panel; the cover and the bars fly from the capsule to their places. --dshmu-isl-k: how far open. */
+.dshmu-isl { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 40; color: var(--dsw-alias-label-secondary); font: 12px/1.5 var(--dsw-font-family);
+  --dshmu-isl-sung: var(--dsw-alias-label-primary); --dshmu-isl-dim: var(--dsw-alias-label-tertiary); }
+.dshmu-isl[hidden] { display: none; }
+.dshmu-isl-clip { position: fixed; overflow: hidden; backdrop-filter: blur(20px) saturate(1.2);
+  background: color-mix(in srgb, var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-1)) calc(var(--dshmu-isl-k, 0) * 100%), var(--dsw-alias-interactive-bg-hover));
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--dsw-alias-border-l2) calc(var(--dshmu-isl-k, 0) * 100%), transparent), 0 calc(8px * var(--dshmu-isl-k, 0)) calc(28px * var(--dshmu-isl-k, 0)) rgb(0 0 0 / calc(.13 * var(--dshmu-isl-k, 0))); }
+.dshmu-isl-tint { position: absolute; inset: -40px; pointer-events: none; }
+.dshmu-isl-tint img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(34px) saturate(1.5); opacity: 0; transition: opacity .5s ease; }
+.dshmu-isl-tint img[data-on] { opacity: .26; }
+body[data-ds-dark-theme] .dshmu-isl-tint img[data-on] { opacity: .34; }
+.dshmu-isl-body { position: absolute; width: 300px; box-sizing: border-box; padding: 14px 14px 10px; }
+.dshmu-isl-head { display: flex; align-items: center; gap: 12px; height: 52px; }
+.dshmu-isl-slot { width: 52px; height: 52px; flex: none; }
+.dshmu-isl-meta { min-width: 0; flex: 1; display: grid; }
+.dshmu-isl-meta > div { grid-area: 1 / 1; min-width: 0; transition: transform .3s cubic-bezier(.2, .8, .2, 1), opacity .22s ease; }
+.dshmu-isl-t { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-label-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dshmu-isl-a { font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dshmu-isl-eqslot { width: 17px; height: 14px; flex: none; align-self: flex-start; margin-top: 4px; }
+.dshmu-isl-ly { position: relative; height: 66px; margin-top: 12px; overflow: hidden; text-align: center; mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent); }
+.dshmu-isl-col { position: absolute; left: 0; right: 0; top: 0; transition: transform .42s cubic-bezier(.2, .8, .2, 1), opacity .25s ease; }
+.dshmu-isl-col > div { height: 22px; line-height: 22px; font-size: 13px; color: var(--dsw-alias-label-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transform: scale(.92); transition: transform .42s cubic-bezier(.2, .8, .2, 1), color .3s ease; }
+.dshmu-isl-col > div[data-cur] { transform: none; color: var(--dsw-alias-label-secondary); }
+.dshmu-isl-col[data-none] > div { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.dshmu-isl-seek { position: relative; display: flex; align-items: center; height: 14px; margin: 7px 0 -1px; touch-action: none; }
+.dshmu-isl-seek[data-can] { cursor: pointer; }
+.dshmu-isl-seek[hidden] { display: flex; visibility: hidden; }
+.dshmu-isl-bar { position: relative; flex: 1; height: 3px; border-radius: 3px; background: var(--dsw-alias-border-l3); overflow: hidden; transition: height .15s ease; }
+.dshmu-isl-seek[data-can]:hover .dshmu-isl-bar, .dshmu-isl-seek[data-drag] .dshmu-isl-bar { height: 5px; }
+.dshmu-isl-knob { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--dsw-alias-label-primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / .2); opacity: 0; transform: scale(.4); transition: opacity .15s ease, transform .15s ease; pointer-events: none; }
+.dshmu-isl-seek[data-can]:hover .dshmu-isl-knob, .dshmu-isl-seek[data-drag] .dshmu-isl-knob { opacity: 1; transform: none; }
+.dshmu-isl-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--dsw-alias-label-secondary); }
+.dshmu-isl-times { display: flex; justify-content: space-between; height: 17px; font-size: 11px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.dshmu-isl-times[hidden] { display: flex; visibility: hidden; }
+.dshmu-isl-btns { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+.dshmu-isl-btns .dshmu-ib { width: 30px; height: 30px; border-radius: 8px; color: var(--dsw-alias-label-secondary); }
+.dshmu-isl-btns .dshmu-ib[hidden] { display: inline-grid; visibility: hidden; }
+.dshmu-isl-btns .dshmu-ib svg { width: 14px; height: 14px; }
+.dshmu-isl-btns .dshmu-isl-pp { width: 36px; height: 36px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dshmu-isl-btns .dshmu-isl-pp svg { width: 16px; height: 16px; transition: transform .25s cubic-bezier(.3, 1.6, .5, 1); }
+.dshmu-isl-btns .dshmu-isl-pp[data-pop] svg { transform: scale(.7); transition: none; }
+.dshmu-isl-btns .dshmu-isl-mode svg { width: 15px; height: 15px; transition: transform .35s cubic-bezier(.2, .8, .2, 1), opacity .2s; }
+.dshmu-isl-btns .dshmu-isl-mode[data-on="true"] { color: var(--dsw-alias-label-primary); }
+.dshmu-isl-btns .dshmu-isl-mode[data-turn] svg { transform: rotate(-90deg) scale(.6); opacity: 0; transition: none; }
+.dshmu-isl-gap { width: 30px; flex: none; }
+.dshmu-isl-say { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 11px; color: var(--dsw-alias-label-tertiary); opacity: 0; transition: opacity .2s; pointer-events: none; }
+.dshmu-isl-say[data-show] { opacity: 1; }
+.dshmu-isl-cover { position: fixed; z-index: 1; overflow: hidden; display: grid; place-items: center; background: var(--dsw-alias-interactive-bg-hover);
+  box-shadow: 0 calc(2px * var(--dshmu-isl-k, 0)) calc(10px * var(--dshmu-isl-k, 0)) rgb(0 0 0 / calc(.14 * var(--dshmu-isl-k, 0))); }
+.dshmu-isl-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .38s cubic-bezier(.2, .8, .2, 1), opacity .3s ease; }
+.dshmu-isl-note { display: none; width: 45%; height: 45%; color: var(--dsw-alias-label-tertiary); }
+.dshmu-isl-note svg { width: 100%; height: 100%; }
+.dshmu-isl-cover[data-blank] .dshmu-isl-note { display: block; }
+.dshmu-isl-eq { position: fixed; z-index: 1; transform-origin: 0 50%; color: var(--dsw-alias-label-secondary); transition: opacity .2s; }
+
+/* The light with the music (glow.js): a ring along the composer card in a new session, the window's edge in a
+   conversation. Colour: --dshmu-glow-c (from the cover, set on body), DSH's blue without one. The composer row's lyric
+   waits (data-dshmu-hold) while the ring draws back to bring it in. */
+.dshmu-ring, .dshmu-edge, .dshmu-edge-css { --dshmu-g: var(--dshmu-glow-c, var(--dsw-alias-brand-primary-new-colorprimary-new-color, rgb(86, 134, 254))); }
+[data-dshmu-ring-root] { position: relative; }
+.dshmu-ring { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.dshmu-ring path, .dshmu-edge path { fill: none; stroke: var(--dshmu-g); stroke-linecap: round; }
+.dshmu-ring path { stroke-width: 1.25; filter: drop-shadow(0 0 2px var(--dshmu-g)) drop-shadow(0 0 7px color-mix(in srgb, var(--dshmu-g) 60%, transparent)); }
+.dshmu-edge { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; pointer-events: none; z-index: 2147483000; }
+.dshmu-edge path { stroke-width: 1.5; filter: drop-shadow(0 0 3px var(--dshmu-g)) drop-shadow(0 0 12px color-mix(in srgb, var(--dshmu-g) 55%, transparent)); }
+.dshmu-edge-css { position: fixed; inset: 0; border-radius: 8px; pointer-events: none; z-index: 2147483000; will-change: opacity;
+  box-shadow: inset 0 0 0 1.5px var(--dshmu-g), inset 0 0 4px 1px color-mix(in srgb, var(--dshmu-g) 80%, transparent),
+    inset 0 0 14px 2px color-mix(in srgb, var(--dshmu-g) 45%, transparent); }
+[data-composer-dock][data-dshmu-hold] > [data-slot] > .dshmu-strip > .dshmu-lyric { opacity: 0 !important; visibility: hidden !important; transition: none !important; }
+
 /* The plugin's settings */
 .dshmu-set { display: flex; flex-direction: column; gap: 14px; }
 .dshmu-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -112,27 +239,33 @@ html[data-dshmu-bg] body > :has([data-shell-bottom]) {
 .dshmu-offsets label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .dshmu-offsets input { width: 84px; }
 @media (prefers-reduced-motion: reduce) {
-  .dshmu-d { display: none; } .dshmu-enter, .dshmu-in { animation: none !important; }
-  .dshmu-ts, .dshmu-strip > *, .dshmu-veil, [data-chat-running] [class*="runningText"],
+  .dshmu-d { display: none; } .dshmu-enter, .dshmu-in, .dshmu-from-r, .dshmu-from-l { animation: none !important; }
+  .dshmu-ts, .dshmu-strip > *, .dshmu-strip .dshmu-ctrl *, .dshmu-isl *, .dshmu-veil, [data-chat-running] [class*="runningText"],
   [data-composer-dock]:has(.dshmu-strip) > *, [data-composer-dock]:has(.dshmu-strip) > [data-slot] > * { transition: none !important; }
 }
 `;
 
 const LOCALE = {
   zh: {
-    play: '播放音乐', resume: '播放', pause: '暂停',
+    play: '播放音乐', resume: '播放', pause: '暂停', prev: '上一首', next: '下一首',
+    mode: '播放模式', mode_order: '顺序播放', mode_list: '列表循环', mode_one: '单曲循环', mode_shuffle: '随机播放',
+    noSeek: '这个播放器不允许从外部调进度', nowPlaying: '正在播放：{title}', pausedSong: '已暂停：{title}', searchingLyrics: '正在找歌词…', noLyrics: '这首歌没有歌词',
     summaryBg: '背景 {bg}',
     musicCoding: 'Music Coding 模式', musicCodingHint: 'AI 干完活音乐渐弱到静音，你打字、说话、发消息时再回来；新歌淡入；静音时跳过不合适的歌',
-    backdrop: '封面背景', backdropHint: '整个窗口底下流动的封面颜色', off: '关', light: '淡', medium: '中', strong: '浓',
+    backdrop: '封面背景', backdropHint: '整个窗口底下流动的封面颜色',
+    edgeGlow: '窗口边缘光', edgeGlowHint: '对话时窗口四周的边缘跟着节拍轻轻发亮', off: '关', light: '淡', medium: '中', strong: '浓',
     duck: '等你批准时的音量', fadeIn: '新歌淡入（Music Coding）', beat: '跟鼓点', beatHint: '鲸尾和背景跟着重拍动',
     offsets: '歌词快慢（毫秒，正数＝歌词提前）', model: '判断歌曲情绪用的模型', modelHint: '只在 Music Coding 里、本地测不准时问，每首一次',
     summary: 'Music Coding {mc} · 背景 {bg}', on: '开',
   },
   en: {
-    play: 'Play music', resume: 'Play', pause: 'Pause',
+    play: 'Play music', resume: 'Play', pause: 'Pause', prev: 'Previous', next: 'Next',
+    mode: 'Play mode', mode_order: 'In order', mode_list: 'Repeat all', mode_one: 'Repeat one', mode_shuffle: 'Shuffle',
+    noSeek: 'This player does not let others move its position', nowPlaying: 'Now playing: {title}', pausedSong: 'Paused: {title}', searchingLyrics: 'Looking for lyrics…', noLyrics: 'No lyrics for this song',
     summaryBg: 'Background {bg}',
     musicCoding: 'Music Coding mode', musicCodingHint: 'Music fades out when the AI is done and comes back as you type, speak or send; new songs fade in; unsuitable songs are skipped while silent',
-    backdrop: 'Cover background', backdropHint: 'The cover as flowing colour behind the whole window', off: 'Off', light: 'Light', medium: 'Medium', strong: 'Strong',
+    backdrop: 'Cover background', backdropHint: 'The cover as flowing colour behind the whole window',
+    edgeGlow: 'Window edge light', edgeGlowHint: 'In a conversation, the window\'s edge lights softly with the beat', off: 'Off', light: 'Light', medium: 'Medium', strong: 'Strong',
     duck: 'Volume while waiting for approval', fadeIn: 'New song fade-in (Music Coding)', beat: 'Follow the beat', beatHint: 'The whale tail and the background move with the kick',
     offsets: 'Lyric timing (ms, positive = earlier)', model: 'Model for song moods', modelHint: 'Asked only in Music Coding, once per song, when measuring is not enough',
     summary: 'Music Coding {mc} · background {bg}', on: 'on',
@@ -176,6 +309,35 @@ function createMusic(remote, t) {
   const beatListeners = new Set();
   const settingsListeners = new Set();
   const live = (m) => m?.status === 'Playing' || m?.status === 'Changing';
+  // A click (play / pause, a place on the progress bar) answers at once. Until the player shows it took it, or HOLD
+  // passes, reports still describing it as it was do not undo it: the host repeats its last look when it passes the
+  // command on, and the player takes a moment to change. Without this the button flips back, then on again.
+  const HOLD = 2500;
+  let want = null, raw = null, wantTimer = 0;   // want: { song, status, pos, at, until, status?/pos? to check }
+  const songOf = (m) => m && `${m.app}\u0000${m.title}\u0000${m.artist}`;
+  const livePos = (m, now) => m.pos + (m.status === 'Playing' ? now - m.at : 0);
+  function ask(status, pos, check) {
+    const now = Date.now(), prev = want && now < want.until && want.song === songOf(media) ? want : null;
+    want = { song: songOf(media), status, pos: Math.max(0, Math.round(pos)), at: now, until: now + HOLD,
+      checkStatus: check === 'status' || !!prev?.checkStatus, checkPos: check === 'pos' || !!prev?.checkPos };
+    media = { ...media, status, pos: want.pos, at: now };
+    clearTimeout(wantTimer);
+    wantTimer = setTimeout(() => {   // the player never showed it: what it reports stands
+      if (!want || Date.now() < want.until) return;
+      want = null;
+      if (raw && media) { setMedia(raw, cover); background(); kick(); island?.update(); glow.update(); }
+    }, HOLD + 30);
+  }
+  function held(m) {
+    raw = m;
+    if (!want) return m;
+    const now = Date.now();
+    if (!m || songOf(m) !== want.song || now > want.until) { want = null; return m; }
+    const statusOk = !want.checkStatus || m.status === want.status;
+    const posOk = !want.checkPos || Math.abs(livePos(m, now) - livePos(want, now)) < 1500;
+    if (statusOk && posOk) { want = null; return m; }
+    return { ...m, status: want.status, pos: want.pos, at: want.at };
+  }
   function expectLyrics() { expect = Date.now() + LYRICS_WAIT; setTimeout(kick, LYRICS_WAIT + 50); }
   function setMedia(m, c) {
     media = m; cover = c;
@@ -197,7 +359,7 @@ function createMusic(remote, t) {
           if (ev?.t === 'state') {
             if (ev.media === null && media) {
               if (!gone) gone = setTimeout(() => { gone = 0; setMedia(null, null); background(); kick(); }, MEDIA_GRACE);
-            } else { clearTimeout(gone); gone = 0; setMedia(ev.media, ev.cover); }
+            } else { clearTimeout(gone); gone = 0; setMedia(held(ev.media), ev.cover); }
             aiIdle = !!ev.aiIdle; mood = ev.mood ?? null;
             lyricsStatus = ev.lyricsStatus ?? null;
             if (lyricsStatus === 'none' || lyricsStatus === 'idle') expect = 0;   // this song has none
@@ -207,15 +369,21 @@ function createMusic(remote, t) {
             if (!synced) { synced = true; waiting = awaitingApproval(); if (!!ev.waiting !== waiting) command(waiting ? 'approval-on' : 'approval-off'); }
             if (ev.settings && JSON.stringify(ev.settings) !== JSON.stringify(settings)) { settings = ev.settings; for (const f of settingsListeners) f(); }
             background();
+            island?.update();
+            glow.update();
           } else if (ev?.t === 'lyrics') {
             if (ev.lyrics) expect = 0;
             else if (lyricRow()) expectLyrics();
             lyrics = ev.lyrics;
+            island?.update();
           }
           else if (ev?.t === 'beat') {
             if (settings.beat !== false && !reduced.matches) bg?.view.pulse(ev.s);   // the flow rushes on each kick
             tail?.beat(ev.s);
             for (const f of beatListeners) f(ev.s);
+            for (const s of strips) s._bars?.beat(ev.s);   // the capsule's bars, and the island's
+            island?.beat(ev.s);
+            glow.beat(ev.s);
             continue;
           }
           kick();
@@ -231,7 +399,7 @@ function createMusic(remote, t) {
     settings = { ...settings, ...patch, offsets: { ...settings.offsets, ...patch.offsets } };
     for (const f of settingsListeners) f();
     command(`set ${JSON.stringify(patch)}`);
-    background(); kick();
+    background(); kick(); glow.update();
   };
 
   // ------------------------------------------------------------------ AI state from the page
@@ -351,16 +519,44 @@ function createMusic(remote, t) {
     const lyric = el('dshmu-pill dshmu-lyric', s);
     el('dshmu-cover', lyric, 'img').alt = '';
     el('dshmu-line', lyric);
-    const pp = el('dshmu-pill dshmu-pp', s, 'button');
+    const ctrl = el('dshmu-ctrl', s);
+    const pp = el('dshmu-ib dshmu-pp', ctrl, 'button');
     pp.type = 'button';
-    // A mouse press must not leave focus on the button: focus inside the row keeps the readings up (:focus-within),
+    // A mouse press must not leave focus on a button: focus inside the row keeps the readings up (:focus-within),
     // so the lyric would not come back when the pointer leaves. Keyboard focus still works as usual.
     pp.addEventListener('mousedown', (e) => e.preventDefault());
-    pp.addEventListener('click', () => {
-      if (!media) { command('launch'); return; }
-      media = { ...media, status: media.status === 'Playing' ? 'Paused' : 'Playing' };   // answer the click at once
-      command('toggle'); background(); kick();
-    });
+    pp.addEventListener('click', () => { if (!media) command('launch'); else toggle(); });
+    const capsule = el('dshmu-cap', ctrl, 'button');
+    capsule.type = 'button';
+    capsule.addEventListener('mousedown', (e) => e.preventDefault());
+    // the island (island.js) is set aside for now: without it the capsule plays and pauses, like the button on it
+    if (typeof createIsland === 'function') { capsule.setAttribute('aria-haspopup', 'dialog'); capsule.setAttribute('aria-expanded', 'false'); }
+    capsule.addEventListener('click', () => { if (island) island.toggle(capsule); else if (media) toggle(); });
+    const art = el('dshmu-cap-art', capsule);
+    el('', art, 'img').alt = '';
+    art.insertAdjacentHTML('beforeend', ICON_NOTE);
+    const eq = el('dshmu-eq', capsule);
+    for (let k = 0; k < 4; k++) el('', eq, 'i');
+    s._bars = createBars([...eq.children]);
+    for (const d of [-1, 1]) {
+      const h = el('dshmu-cap-hint', capsule, 'span');
+      h.dataset.d = String(d); h.setAttribute('aria-hidden', 'true');
+      h.innerHTML = `<svg viewBox="0 0 3 6"><path d="${d < 0 ? 'M2.6.5.4 3l2.2 2.5' : 'M.4.5 2.6 3 .4 5.5'}" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    capsule.addEventListener('wheel', (e) => {
+      if (!media) return;
+      e.preventDefault();
+      const d = wheelSkip(e);
+      if (!d) return;
+      const h = capsule.querySelector(`.dshmu-cap-hint[data-d="${d}"]`);
+      h.setAttribute('data-flick', ''); clearTimeout(h._flick);
+      h._flick = setTimeout(() => h.removeAttribute('data-flick'), 160);
+    }, { passive: false });
+  }
+  function toggle() {
+    const on = media.status === 'Playing';
+    ask(on ? 'Paused' : 'Playing', livePos(media, Date.now()), 'status');   // answer the click at once
+    command('toggle'); background(); kick(); island?.update(); glow.update();
   }
   function paintStrip(s, pos, i) {
     if (!s.firstChild) buildStrip(s);
@@ -380,6 +576,26 @@ function createMusic(remote, t) {
       if (state === 'play') pp.removeAttribute('title'); else pp.title = t(state);   // no words on the start button
       pp.setAttribute('aria-label', t(state));
     }
+    const play = !media ? 'none' : media.status === 'Playing' ? 'playing' : 'paused';
+    if (s.dataset.play !== play) s.dataset.play = play;
+    const cap = s.querySelector('.dshmu-cap');
+    if (cap._cover !== cover) {
+      const img = cap.querySelector('.dshmu-cap-art > img');
+      // a new song's cover slides in the way the song went, as on the island (not a late cover for the same song)
+      const dir = cap._cover && cover && cap._coverSong !== undefined && cap._coverSong !== song && !reduced.matches ? skipDir() : 0;
+      if (dir) {
+        const old = img.cloneNode(), ease = 'cubic-bezier(.2, .8, .2, 1)';
+        img.after(old);
+        old.animate([{ transform: 'none' }, { transform: `translateX(${-dir * 100}%)` }], { duration: 320, easing: ease, fill: 'forwards' })
+          .finished.then(() => old.remove(), () => old.remove());
+        img.animate([{ transform: `translateX(${dir * 100}%)` }, { transform: 'none' }], { duration: 320, easing: ease });
+      }
+      cap._cover = cover; cap._coverSong = song;
+      img.hidden = !cover; if (cover) img.src = cover;
+      cap.firstChild.toggleAttribute('data-blank', !cover);
+    }
+    const capLabel = media ? t(media.status === 'Playing' ? 'nowPlaying' : 'pausedSong', { title: media.title ?? '' }) : '';
+    if (cap.getAttribute('aria-label') !== capLabel) cap.setAttribute('aria-label', capLabel);
     const dock = s.closest('[data-composer-dock]');
     if (dock && ctxLine.update(dock, mode === 'lyric' && !dock.matches(':hover, :focus-within') && !dock.querySelector('[aria-expanded="true"]'), still)) moving = true;
     if (mode !== 'lyric') return;   // the lyric keeps its last words while it fades out
@@ -387,14 +603,35 @@ function createMusic(remote, t) {
     if (img._src !== cover) { img._src = cover; if (cover) img.src = cover; img.hidden = !cover; }
     const l = i >= 0 ? lyrics.lines[i] : null;
     if (line._l !== l || line._lyrics !== lyrics || (!l && line._title !== media.title)) {
+      const w0 = still ? 0 : line.parentElement.getBoundingClientRect().width;
       line._l = l; line._lyrics = lyrics; line._title = media.title;
       const words = el('dshmu-words');
       if (l) words.append(...wordSpans(l)); else words.textContent = [media.title, media.artist].filter(Boolean).join(' · ');
       line.replaceChildren(words);
       if (l?.tr) { el('dshmu-sep', line).textContent = '·'; el('dshmu-tr', line).textContent = l.tr; }
-      restart(line, 'dshmu-in');
+      const newSong = line._song !== undefined && line._song !== song;
+      line._song = song;
+      line.classList.remove('dshmu-in', 'dshmu-from-r', 'dshmu-from-l');
+      restart(line, newSong ? (skipDir() < 0 ? 'dshmu-from-l' : 'dshmu-from-r') : 'dshmu-in');
+      glideWidth(line.parentElement, w0);
     }
     if (l) paint(line.firstChild, pos);
+  }
+
+  // The lyric sits centred on the row, so a new line (or song) of another length would move its cover and both ends at
+  // once: from the width it had, it glides to the new one instead (the CSS transition on width), then lets go.
+  function glideWidth(e, w0) {
+    clearTimeout(e._glide);
+    e.style.width = '';
+    const w1 = e.getBoundingClientRect().width;
+    if (!w0 || !w1 || Math.abs(w1 - w0) < 1 || reduced.matches) { e.removeAttribute('data-dshmu-glide'); return; }
+    e.setAttribute('data-dshmu-glide', '');
+    e.style.transition = 'none';
+    e.style.width = `${w0}px`;
+    void e.offsetWidth;
+    e.style.transition = '';
+    e.style.width = `${w1}px`;
+    e._glide = setTimeout(() => { e.style.width = ''; e.removeAttribute('data-dshmu-glide'); }, 320);
   }
 
   // A subagent's chat in the right sidebar has a composer of its own: that one stays as DSH draws it.
@@ -431,6 +668,7 @@ function createMusic(remote, t) {
       row(t('backdrop'), t('backdropHint'), seg('bg', t('backdrop'), bgName,
         ['off', 'light', 'medium', 'strong'].map((v) => ({ value: v, label: t(v) })),
         (v) => setSettings({ backdrop: { off: 0, light: 0.2, medium: 0.32, strong: 0.5 }[v] }))),
+      row(t('edgeGlow'), t('edgeGlowHint'), h(Switch, { checked: s.edgeGlow !== false, label: t('edgeGlow'), onChange: (v) => setSettings({ edgeGlow: v }) })),
       row(t('duck'), null, seg('duck', t('duck'), String(s.duck ?? 0.5),
         ['0.3', '0.5', '0.7'].map((v) => ({ value: v, label: `${Math.round(v * 100)}%` })), (v) => setSettings({ duck: Number(v) }))),
       MUSIC_CODING && row(t('fadeIn'), null, seg('fade', t('fadeIn'), String(s.fadeIn ?? 8),
@@ -450,6 +688,36 @@ function createMusic(remote, t) {
   // way, eased; the flow eases to a stop and back up with the music (backdrop.js). The layer starts showing only once
   // the cover is drawn on it.
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // ------------------------------------------------------------------ skipping songs; the player unfolded from the capsule
+  // Songs changed from here slide the way they went (scrolled up / the previous-song button: back); any other change
+  // goes forward. island.js is not built into the plugin for now (build.mjs); everything here runs without it.
+  let skip = { dir: 1, at: 0 };
+  const skipDir = () => (Date.now() - skip.at < 8000 ? skip.dir : 1);
+  function skipSong(d) { skip = { dir: d, at: Date.now() }; command(d > 0 ? 'next' : 'prev'); }
+  // The wheel on the capsule (or the island's cover): one song per notch, at most one every 450 ms (a trackpad's run of
+  // small deltas counts once). Returns the way it went, or 0 when it did nothing.
+  let wheelAt = 0;
+  function wheelSkip(e) {
+    const now = performance.now(), dy = e.deltaY || e.deltaX;
+    if (now - wheelAt < 450 || Math.abs(dy) < 4) return 0;
+    wheelAt = now;
+    const d = dy > 0 ? 1 : -1;
+    if (!media || (d > 0 ? media.next : media.prev) === false) return 0;
+    skipSong(d);
+    return d;
+  }
+  const island = typeof createIsland === 'function' ? createIsland({
+    t, command, reduced, toggle, dir: skipDir, wheelSkip,
+    media: () => media, cover: () => cover, lyrics: () => lyrics, position: () => position(),
+    skip: skipSong,
+    seek(ms) {   // answer the drag at once; the player's own report follows
+      if (!media) return;
+      ask(media.status, ms, 'pos');
+      command(`seek ${Math.round(ms)}`); kick();
+    },
+    lyricsWord: () => t(lyricsStatus === 'searching' || expect > Date.now() ? 'searchingLyrics' : 'noLyrics'),
+  }) : null;
   const BG_MS = 1500, BG_TINT = 55;
   let bg = null;   // { layer, view, cover, ready, want, p (0..1 shown), to, rate, raf, inMs }
   const smooth = (x) => x * x * (3 - 2 * x);
@@ -512,9 +780,14 @@ function createMusic(remote, t) {
   // (or the context line is still turning back into DSH's ring)
   const carried = carryIn();
   const ctxLine = createContextLine(reduced, { pct: carried?.ctxPct });
-  let moving = false;
-  function frame() {
+  const glow = createGlow({
+    reduced, carried: carried?.glow, cover: () => cover, edgeOn: () => settings.edgeGlow !== false,
+    state: () => (!media ? 'none' : media.status === 'Playing' ? 'playing' : 'paused'),
+  });
+  let moving = false, lastFrame = 0;
+  function frame(now) {
     raf = 0;
+    const dt = Math.min(50, lastFrame ? now - lastFrame : 0); lastFrame = now;
     const hosts = [...indicators()].filter((e) => !embedded(e));
     const on = playing();
     const pos = on ? position() : 0, i = on ? lineAt(pos) : -1;
@@ -524,8 +797,15 @@ function createMusic(remote, t) {
       indKey = lineKey(l);
     }
     moving = false;
-    for (const s of strips) paintStrip(s, pos, i);
-    if ((on && (hosts.length || strips.size)) || moving) raf = requestAnimationFrame(frame);
+    // the capsule's beat bars move while they can be seen: the music plays and the row shows its controls
+    let bars = false;
+    for (const s of strips) {
+      paintStrip(s, pos, i);
+      if (s._bars && s.dataset.play === 'playing' && !reduced.matches
+        && (s.dataset.mode !== 'lyric' || s.closest('[data-composer-dock]')?.matches(':hover, :focus-within'))) { s._bars.step(dt, true); bars = true; }
+    }
+    if ((on && (hosts.length || strips.size)) || moving || bars) raf = requestAnimationFrame(frame);
+    else lastFrame = 0;
   }
   function kick() { if (!raf) raf = requestAnimationFrame(frame); }
 
@@ -551,7 +831,7 @@ function createMusic(remote, t) {
   }
   function carryOut() {
     return { at: Date.now(), media, cover, heard, lyrics, lyricsStatus, mood, settings, expect, indKey, song,
-      ctxPct: ctxLine.pct(), tail: tail?.save?.() ?? null, bg: !!bg && bg.p > 0 };
+      ctxPct: ctxLine.pct(), tail: tail?.save?.() ?? null, bg: !!bg && bg.p > 0, glow: glow.save() };
   }
   const onPageHide = () => { try { sessionStorage.setItem(CARRY_KEY, JSON.stringify({ ...carryOut(), tail: null })); } catch { } };
 
@@ -593,6 +873,8 @@ function createMusic(remote, t) {
     document.querySelectorAll('.dshmu-on').forEach((e) => e.classList.remove('dshmu-on'));
     for (const s of strips) { delete s.dataset.mode; s.replaceChildren(); }
     ctxLine.dispose();
+    island?.dispose();
+    glow.dispose();
     tail?.dispose();
     const html = document.documentElement;
     const clear = () => { style.remove(); html.removeAttribute('data-dshmu-bg'); html.style.removeProperty('--dshmu-tint'); html.style.removeProperty('--dshmu-bg-strength'); };

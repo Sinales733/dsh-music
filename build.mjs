@@ -10,10 +10,12 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 fs.mkdirSync(path.join(root, 'lib'), { recursive: true });
 
+// src/client/island.js (the small player unfolding from the capsule) is set aside for now and not built in. To bring
+// it back, put it in the list after bars.js: music.js uses it whenever createIsland is defined.
 // The whale tail (vendor rig from dsh-motion, groove = its beat-locked motion, tail = on screen) comes before
 // music.js, which starts it when createTail is defined.
 const body = ['src/client/remote.js', 'src/client/backdrop.js', 'src/client/vendor/rig-model.js', 'src/client/vendor/surface.js',
-  'src/client/groove.js', 'src/client/vendor/sway-frames.js', 'src/client/swaybeat.js', 'src/client/tail.js', 'src/client/ctxline.js', 'src/client/music.js'].map(read).join('\n');
+  'src/client/groove.js', 'src/client/vendor/sway-frames.js', 'src/client/swaybeat.js', 'src/client/tail.js', 'src/client/ctxline.js', 'src/client/bars.js', 'src/client/glow.js', 'src/client/music.js'].map(read).join('\n');
 const client = `window.__ModuleLoader__.load({
 \tid: ${JSON.stringify(pkg.name)},
 \tfactory: (require) => {
