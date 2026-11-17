@@ -479,7 +479,9 @@ function KuGouNow($title, [bool]$newTrack) {
     $state = switch ($f[2]) { '2' { 'Playing' } '1' { 'Paused' } default { $null } }
     if (-not $state) { $state = [string]$script:session.GetPlaybackInfo().PlaybackStatus }
     $pos = [long]$f[0]; $dur = [long]$f[1]
-    if ($newTrack -and $script:trackKey -and -not $script:kgSince) { $script:kgSince = $now }   # from the first sight of the new song
+    # from the first sight of the new song, when the last one was KuGou's too (only its own last place can be stale; KuGou
+    # opened again, or come to from another player, is read as it is: it may go on from where it stopped)
+    if ($newTrack -and ($script:trackKey -split '\|', 2)[0] -match 'kugou' -and -not $script:kgSince) { $script:kgSince = $now }
     if ($script:kgSince) { if ($now - $script:kgSince -lt 1500) { if ($pos -gt 3000) { $pos = 0 } } else { $script:kgSince = 0 } }
     $l = $script:kgLast
     $expect = if ($l) { $l.pos + $(if ($l.status -eq 'Playing') { $now - $l.at } else { 0 }) } else { 0 }
