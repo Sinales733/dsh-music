@@ -31,8 +31,8 @@ Every transition follows the music: things animate when a song starts, pauses or
   Windows 10 / 11 (it uses the system media controls, the volume mixer and loopback capture; the built-in Windows PowerShell 5.1 is enough)
 - DSH 桌面版，在 0.2.2 上开发和测试
   DSH desktop, developed and tested on 0.2.2
-- 会向 Windows 报告播放信息的音乐软件：Spotify、网易云音乐、QQ 音乐、Apple Music、酷狗、foobar2000。网易云音乐不报告播放进度，插件改读它自己的日志来算进度。
-  A music player that reports to Windows' media controls: Spotify, NetEase Cloud Music, QQ Music, Apple Music, KuGou, foobar2000. NetEase Cloud Music reports no playing position, so the plugin reads its position from the player's own log.
+- 会向 Windows 报告播放信息的音乐软件：Spotify、网易云音乐、QQ 音乐、Apple Music、酷狗、foobar2000；汽水音乐、酷我、波点、TIDAL、Deezer、Amazon Music、YouTube Music 桌面版、Cider、MusicBee、AIMP、iTunes、Qobuz、Windows 媒体播放器等也按它们报告的名字认得（这些没有逐个试过）。网易云音乐不报告播放进度，插件改读它自己的日志来算进度。酷狗不报告进度和歌手，插件从酷狗进程里直接读进度、时长和播放状态（只读，位置来自 [AF Media Bar](https://github.com/Fervent-Tempo/AF-Media-Bar)，目前认得 20.1.61.28014 和 20.1.51.2797x 这几版），歌手从酷狗窗口标题里取；别的版本读不到进度，只显示歌名、不显示歌词。QQ 音乐没有会员时只放一分钟试听，歌词会对到试听的那一段。演唱会版（Live）只用同一场、长度差不多的现场版歌词；找不到时只显示歌名，不拿录音室版的歌词凑。
+  A music player that reports to Windows' media controls: Spotify, NetEase Cloud Music, QQ Music, Apple Music, KuGou, foobar2000; Soda Music, Kuwo, Bodian, TIDAL, Deezer, Amazon Music, the YouTube Music desktop app, Cider, MusicBee, AIMP, iTunes, Qobuz, Windows Media Player and others are recognised by the names they report (not each tried). NetEase Cloud Music reports no playing position, so the plugin reads its position from the player's own log. KuGou reports neither a position nor the artist: the plugin reads the position, length and play state out of KuGou's memory (read only; the addresses come from [AF Media Bar](https://github.com/Fervent-Tempo/AF-Media-Bar) and are known for builds 20.1.61.28014 and 20.1.51.2797x), and the artist from its window's title. With another build the position cannot be read, and only the song's name shows, no lyrics. QQ Music without a membership plays a one-minute preview, and the lyrics follow that minute. A live recording takes only lyrics of a live cut about as long; with none, only the song's name shows rather than the studio cut's lyrics.
 
 ## 安装 / Install
 
@@ -55,24 +55,26 @@ On npm the package is `dsh-whale-music` (the name `dsh-music` is taken there). I
 
 ## 设置 / Settings
 
-在 DSH 的插件管理里打开 dsh-whale-music 的页面。
+在 DSH 的插件管理里打开 dsh-whale-music 的页面。页面最上面是一个缩小的 DSH 窗口（你上一次打开的对话），歌词行、运行指示器、窗口边缘光和封面背景都在上面实时跑，改设置马上就能看到效果。
 
-Open dsh-whale-music's page in DSH's plugin manager.
+Open dsh-whale-music's page in DSH's plugin manager. At its top is a small copy of the DSH window (the conversation you last had open) with the lyric row, the running indicator, the window's edge light and the cover background running live on it, so a change shows at once.
 
 | 设置 / Setting | 说明 / What it does |
 |---|---|
 | 封面背景 / Cover background | 关、淡、中、浓 / off, light, medium, strong |
+| 显示歌词 / Show lyrics | 关掉后输入栏下面只显示歌名和封面 / off: the row under the composer shows only the song and its cover |
+| 显示翻译 / Show translations | 外文歌的歌词后面跟着中文翻译，可以关掉 / the translation after each line of a song in another language; can be turned off |
 | 窗口边缘光 / Window edge light | 对话时窗口边缘跟着节拍发亮，可以关掉 / the window's edge glowing with the beat in a conversation; can be turned off |
-| 等你批准时的音量 / Volume while waiting for approval | 30%、50%（默认 / default）、70% |
+| 等你批准时的音量 / Volume while waiting for approval | 0–100% 滑动调节，默认 50% / a slider, 0–100%, 50% by default |
 | 跟鼓点 / Follow the beat | 鲸尾和背景跟着重拍动 / the tail and the background move with the kick |
-| 歌词快慢 / Lyric timing | 每个播放器单独调，单位毫秒，正数让歌词提前 / per player, in milliseconds; positive shows lyrics earlier |
+| 歌词快慢 / Lyric timing | 先选播放器再填，单位毫秒，正数让歌词提前 / pick a player, then its value in milliseconds; positive shows lyrics earlier |
 
 ## 隐私与网络 / Privacy & network
 
 - **鼓点**：用 Windows 的环回采集「听」电脑正在放的声音，只在内存里找重拍，不录音、不保存、不上传。听到的是电脑的全部声音，别的声音也可能被当成鼓点。
   **Beats**: Windows loopback capture "listens" to what the computer is playing, and kicks are found in memory only; nothing is recorded, saved or sent anywhere. It hears all of the computer's sound, so other sounds can be taken for kicks too.
-- **歌词**：用歌名、歌手、专辑和时长，向网易云音乐、QQ 音乐和 [LRCLIB](https://lrclib.net) 查歌词。前两个是非官方接口，哪天对方改了可能就查不到了。插件不发出别的网络请求。
-  **Lyrics**: looked up by title, artist, album and length on NetEase Cloud Music, QQ Music and [LRCLIB](https://lrclib.net). The first two are unofficial interfaces and may stop working if they change. The plugin makes no other network requests.
+- **歌词**：用歌名、歌手、专辑和时长，向网易云音乐、QQ 音乐、酷狗和 [LRCLIB](https://lrclib.net) 查歌词（歌名加歌手搜不到时，像 Lyricify 那样只用歌名再搜一次；在 QQ 音乐、酷狗里放的歌优先用它们自己的歌词）。前三个是非官方接口，哪天对方改了可能就查不到了。网易云和 QQ 的逐字歌词是按它们自己那一版歌对的时间，播放器放的是另一版（比如前奏长两秒）时，插件拿 LRCLIB 的同一首歌对照，整体错开就把歌词整体挪过去。插件不发出别的网络请求。
+  **Lyrics**: looked up by title, artist, album and length on NetEase Cloud Music, QQ Music, KuGou and [LRCLIB](https://lrclib.net) (a source with no match for title and artist is searched again by the title alone, as Lyricify does; a song played in QQ Music or KuGou takes that service's own lyrics first). The first three are unofficial interfaces and may stop working if they change. NetEase's and QQ's word-timed lyrics follow their own cut of a song; when the player plays another cut (a longer intro, say), they are checked against LRCLIB's lyrics for the song and moved by the steady difference. The plugin makes no other network requests.
 - **本地文件 / Local files**：设置和每首歌测出的节奏、激烈程度在 `%LOCALAPPDATA%\dsh-music\`；封面缓存和运行日志在 `%TEMP%\dsh-music\`。
   Settings and each song's measured tempo and intensity are in `%LOCALAPPDATA%\dsh-music\`; the cover cache and a log in `%TEMP%\dsh-music\`.
 

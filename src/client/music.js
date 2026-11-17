@@ -17,12 +17,12 @@ const h = React.createElement;
 // The composer row entries copy the statistics pill metrics (ui-chat StatsPills.module.css).
 const CSS = `
 /* The indicator lyric lies over DSH's label ("Deep diving …"), where the label starts; the two cross-fade. */
-[data-chat-running] [class*="runningText"] { transition: opacity .16s ease .06s; }
-[data-chat-running].dshmu-on [class*="runningText"] { opacity: 0; transition: opacity .12s ease; }
+[data-chat-running] [class*="runningText"], [data-dshmu-pv-running] [class*="runningText"] { transition: opacity .16s ease .06s; }
+:is([data-chat-running], [data-dshmu-pv-running]).dshmu-on [class*="runningText"] { opacity: 0; transition: opacity .12s ease; }
 .dshmu-ts { display: inline-grid; position: absolute; left: var(--dshmu-ts-x, 0px); top: var(--dshmu-ts-y, 0px); width: max-content;
   max-width: min(60vw, 640px); min-width: 0; color: inherit; opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s .12s;
   --dshmu-sung: var(--dsw-alias-label-deep-diving); --dshmu-dim: color-mix(in srgb, var(--dsw-alias-label-deep-diving) 38%, var(--dsw-alias-bg-base)); }
-[data-chat-running].dshmu-on .dshmu-ts { opacity: 1; visibility: visible; transition: opacity .16s ease .06s, visibility 0s; }
+:is([data-chat-running], [data-dshmu-pv-running]).dshmu-on .dshmu-ts { opacity: 1; visibility: visible; transition: opacity .16s ease .06s, visibility 0s; }
 /* Shown again as it was (DSH rebuilt the indicator or the composer row while the music went on): no fades. */
 [data-dshmu-still] [class*="runningText"], [data-dshmu-still] .dshmu-ts, [data-dshmu-still] .dshmu-ts *,
 [data-composer-dock][data-dshmu-still] > *, [data-composer-dock][data-dshmu-still] > [data-slot] > *, [data-dshmu-still] .dshmu-strip * { transition: none !important; }
@@ -73,7 +73,7 @@ button.dshmu-pill { cursor: pointer; }
 .dshmu-cap-hint svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .dshmu-cap-hint[data-d="-1"] { left: -5px; transform: translateX(1.5px); }
 .dshmu-cap-hint[data-d="1"] { right: -6px; transform: translateX(-1.5px); }
-@media (hover: hover) { .dshmu-cap:hover .dshmu-cap-hint { opacity: .4; transform: none; } }
+@media (hover: hover) { .dshmu-ctrl:hover .dshmu-cap-hint { opacity: .4; transform: none; } }
 .dshmu-cap .dshmu-cap-hint[data-flick] { opacity: .85; transition: opacity .08s ease, transform .08s ease; }
 .dshmu-cap .dshmu-cap-hint[data-flick][data-d="-1"] { transform: translateX(-1.5px); }
 .dshmu-cap .dshmu-cap-hint[data-flick][data-d="1"] { transform: translateX(1.5px); }
@@ -148,7 +148,7 @@ button.dshmu-pill { cursor: pointer; }
    set with the layer's opacity in one step, so the two move together). The originals are captured on body, where the
    theme defines them, so the overrides follow light and dark. Cards, the composer and menus keep their own opaque
    surfaces. */
-body { --dshmu-sidebar: var(--dsw-specific-sidebar-fill); }
+body { --dshmu-sidebar: var(--dsw-specific-sidebar-fill); --dshmu-base: var(--dsw-alias-bg-base); }
 html[data-dshmu-bg] body > :has([data-shell-bottom]) {
   --dsw-alias-bg-base: transparent;
   --dsw-specific-sidebar-fill: color-mix(in srgb, var(--dshmu-sidebar) var(--dshmu-tint, 55%), transparent);
@@ -230,14 +230,50 @@ body[data-ds-dark-theme] .dshmu-isl-tint img[data-on] { opacity: .34; }
     inset 0 0 14px 2px color-mix(in srgb, var(--dshmu-g) 45%, transparent); }
 [data-composer-dock][data-dshmu-hold] > [data-slot] > .dshmu-strip > .dshmu-lyric { opacity: 0 !important; visibility: hidden !important; transition: none !important; }
 
+/* The settings page's preview: a copy of the DSH window as it last showed a conversation (the page itself takes the
+   conversation's place), with this plugin's things live on it: the lyric row, the running indicator, the window's edge
+   and the cover background, all as the settings now make them. Only the composer row takes the pointer. */
+.dshmu-pv { position: relative; width: 100%; overflow: hidden; border-radius: 8px; isolation: isolate; background: var(--dshmu-base);
+  box-shadow: 0 0 0 .5px var(--dsw-alias-border-l2), 0 6px 24px rgb(0 0 0 / .08); }
+.dshmu-pv-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.dshmu-pv-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.dshmu-pv-bg .dshmu-veil { position: absolute; inset: 0; background: var(--dshmu-base); opacity: calc(1 - var(--dshmu-bg-strength, .32)); }
+.dshmu-pv-scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.dshmu-pv-app { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none; }
+.dshmu-pv-app [data-composer-dock], .dshmu-pv-app [data-composer-dock] * { pointer-events: auto; }
+html[data-dshmu-bg] .dshmu-pv-app { --dsw-alias-bg-base: transparent;
+  --dsw-specific-sidebar-fill: color-mix(in srgb, var(--dshmu-sidebar) var(--dshmu-tint, 55%), transparent); }
+.dshmu-pv-edge { position: absolute; inset: 0; border-radius: 8px; pointer-events: none; z-index: 2147483000; opacity: 0;
+  --dshmu-g: var(--dshmu-glow-c, var(--dsw-alias-brand-primary-new-colorprimary-new-color, rgb(86, 134, 254)));
+  box-shadow: inset 0 0 0 1.5px var(--dshmu-g), inset 0 0 4px 1px color-mix(in srgb, var(--dshmu-g) 80%, transparent),
+    inset 0 0 14px 2px color-mix(in srgb, var(--dshmu-g) 45%, transparent); }
+.dshmu-pv-ring { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2;
+  --dshmu-g: var(--dshmu-glow-c, var(--dsw-alias-brand-primary-new-colorprimary-new-color, rgb(86, 134, 254))); }
+.dshmu-pv-ring path { fill: none; stroke: var(--dshmu-g); stroke-width: 1.25; filter: drop-shadow(0 0 2px var(--dshmu-g)) drop-shadow(0 0 7px color-mix(in srgb, var(--dshmu-g) 60%, transparent)); }
+.dshmu-pv-none { padding: 28px 16px; text-align: center; color: var(--dsw-alias-label-tertiary); font-size: 12px; border-radius: 8px; box-shadow: 0 0 0 .5px var(--dsw-alias-border-l2); }
+.dshmu-range { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.dshmu-range input { width: 180px; accent-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, rgb(86, 134, 254)); }
+.dshmu-range span { width: 36px; text-align: right; }
+
+/* On this plugin's own page in DSH's plugin manager, its README (the page's long description) and the one-line
+   description under its name are left out, so the settings and their preview come first. GitHub and npm still show
+   both. */
+:has(> section[data-plugin-config] .dshmu-set) > section[data-detail-document] { display: none !important; }
+:has(> * > section[data-plugin-config] .dshmu-set) > :has(> p > code[data-plugin-name]) > p:not(:has(> code[data-plugin-name])) { display: none !important; }
+
 /* The plugin's settings */
 .dshmu-set { display: flex; flex-direction: column; gap: 14px; }
 .dshmu-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .dshmu-row > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dshmu-hint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.dshmu-offsets { display: flex; gap: 10px; flex-wrap: wrap; }
-.dshmu-offsets label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.dshmu-offsets input { width: 84px; }
+/* lyric timing: pick the player, then its number (DSH's own selects: a native select drawn like its inputs) */
+.dshmu-offsets { display: flex; gap: 8px; align-items: center; }
+.dshmu-offsets input { width: 72px; }
+.dshmu-select { appearance: none; height: 32px; padding: 0 30px 0 10px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center / 12px 12px;
+  color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; outline: none; cursor: pointer; }
+.dshmu-select:focus-visible { border-color: var(--dsw-alias-state-business-primary); }
+.dshmu-select option { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
 @media (prefers-reduced-motion: reduce) {
   .dshmu-d { display: none; } .dshmu-enter, .dshmu-in, .dshmu-from-r, .dshmu-from-l { animation: none !important; }
   .dshmu-ts, .dshmu-strip > *, .dshmu-strip .dshmu-ctrl *, .dshmu-isl *, .dshmu-veil, [data-chat-running] [class*="runningText"],
@@ -253,9 +289,14 @@ const LOCALE = {
     summaryBg: '背景 {bg}',
     musicCoding: 'Music Coding 模式', musicCodingHint: 'AI 干完活音乐渐弱到静音，你打字、说话、发消息时再回来；新歌淡入；静音时跳过不合适的歌',
     backdrop: '封面背景', backdropHint: '整个窗口底下流动的封面颜色',
+    lyricsOn: '显示歌词', lyricsOnHint: '关掉后输入栏下面只显示歌名和封面',
+    translation: '显示翻译', translationHint: '外文歌的歌词后面跟着中文翻译',
+    previewNone: '打开一个对话之后，这里会显示 DSH 窗口放歌时的样子', previewMessage: '帮我看看这个函数为什么报错', previewFolders: 'my-app|website|scripts|notes', previewSessions: '整理项目的目录结构|把配置改成从环境变量读|给登录页加记住密码|修一下分页的边界情况|写一份接口文档|优化首页加载速度',
     edgeGlow: '窗口边缘光', edgeGlowHint: '对话时窗口四周的边缘跟着节拍轻轻发亮', off: '关', light: '淡', medium: '中', strong: '浓',
     duck: '等你批准时的音量', fadeIn: '新歌淡入（Music Coding）', beat: '跟鼓点', beatHint: '鲸尾和背景跟着重拍动',
-    offsets: '歌词快慢（毫秒，正数＝歌词提前）', model: '判断歌曲情绪用的模型', modelHint: '只在 Music Coding 里、本地测不准时问，每首一次',
+    offsets: '歌词快慢', offsetsHint: '先选播放器，再填它的歌词要提前多少毫秒（负数＝推后）', offsetsPlayer: '播放器',
+    player_cloudmusic: '网易云音乐', player_QQMusic: 'QQ 音乐', player_KuGou: '酷狗音乐', player_SodaMusic: '汽水音乐', player_kwmusic: '酷我音乐', player_bodian_pc: '波点音乐', 'player_Microsoft.Media.Player': '媒体播放器',
+    model: '判断歌曲情绪用的模型', modelHint: '只在 Music Coding 里、本地测不准时问，每首一次',
     summary: 'Music Coding {mc} · 背景 {bg}', on: '开',
   },
   en: {
@@ -265,9 +306,14 @@ const LOCALE = {
     summaryBg: 'Background {bg}',
     musicCoding: 'Music Coding mode', musicCodingHint: 'Music fades out when the AI is done and comes back as you type, speak or send; new songs fade in; unsuitable songs are skipped while silent',
     backdrop: 'Cover background', backdropHint: 'The cover as flowing colour behind the whole window',
+    lyricsOn: 'Show lyrics', lyricsOnHint: 'Off: the row under the input shows only the song and its cover',
+    translation: 'Show translations', translationHint: 'A translation after each line, for songs in other languages',
+    previewNone: 'Open a conversation, and the DSH window with the music will show here', previewMessage: 'Why does this function throw?', previewFolders: 'my-app|website|scripts|notes', previewSessions: 'Tidy up the project layout|Read the config from env vars|Remember me on the login page|Fix the pagination edge case|Write the API docs|Speed up the home page',
     edgeGlow: 'Window edge light', edgeGlowHint: 'In a conversation, the window\'s edge lights softly with the beat', off: 'Off', light: 'Light', medium: 'Medium', strong: 'Strong',
     duck: 'Volume while waiting for approval', fadeIn: 'New song fade-in (Music Coding)', beat: 'Follow the beat', beatHint: 'The whale tail and the background move with the kick',
-    offsets: 'Lyric timing (ms, positive = earlier)', model: 'Model for song moods', modelHint: 'Asked only in Music Coding, once per song, when measuring is not enough',
+    offsets: 'Lyric timing', offsetsHint: 'Pick a player, then how many ms earlier its lyrics show (negative = later)', offsetsPlayer: 'Player',
+    player_cloudmusic: 'NetEase Cloud Music', player_QQMusic: 'QQ Music', player_KuGou: 'KuGou', player_SodaMusic: 'Soda Music', player_kwmusic: 'Kuwo', player_bodian_pc: 'Bodian', 'player_Microsoft.Media.Player': 'Media Player',
+    model: 'Model for song moods', modelHint: 'Asked only in Music Coding, once per song, when measuring is not enough',
     summary: 'Music Coding {mc} · background {bg}', on: 'on',
   },
 };
@@ -323,7 +369,7 @@ function createMusic(remote, t) {
     media = { ...media, status, pos: want.pos, at: now };
     clearTimeout(wantTimer);
     wantTimer = setTimeout(() => {   // the player never showed it: what it reports stands
-      if (!want || Date.now() < want.until) return;
+      if (lifetime.signal.aborted || !want || Date.now() < want.until) return;
       want = null;
       if (raw && media) { setMedia(raw, cover); background(); kick(); island?.update(); glow.update(); }
     }, HOLD + 30);
@@ -443,9 +489,14 @@ function createMusic(remote, t) {
   }
 
   // ------------------------------------------------------------------ where the song is
-  const playing = () => !!(media && media.status === 'Playing' && lyrics?.lines?.length && !lyrics.instrumental);
-  // the lyric row: while a song with lyrics plays, and while a playing song's lyrics are on their way
-  const lyricRow = () => playing() || (expect > Date.now() && live(media));
+  // Lyrics turned off in the settings, a live cut with no lyrics timed for it (nameOnly), or a player that tells no
+  // place in the song (noPos: KuGou, a build whose place the bridge cannot read): no lyrics show, the row names the
+  // song while it plays.
+  const lyricsOn = () => settings.lyrics !== false && !lyrics?.nameOnly && !media?.noPos;
+  const playing = () => !!(lyricsOn() && media && media.status === 'Playing' && lyrics?.lines?.length && !lyrics.instrumental);
+  // the lyric row: while a song with lyrics plays, and while a playing song's lyrics are on their way (named until
+  // they come, however long the search takes)
+  const lyricRow = () => !media?.changing && (playing() || (live(media) && (!lyricsOn() || expect > Date.now() || lyricsStatus === 'searching')));
   const position = () => media.pos + (Date.now() - media.at) + (settings.offsets?.[media.proc] ?? 0);
   function lineAt(pos) {
     let i = -1;
@@ -460,8 +511,18 @@ function createMusic(remote, t) {
   // Fades and motion are for the music changing.
   let rowMode, rowSince = -Infinity, indKey = null;
   const lineKey = (l) => l && `${l.t}\u0000${l.text}`;
+  // A song change passes through Stopped and Changing (QQ Music) and a moment with no lyrics: the row keeps showing
+  // the lyric (the song's name, until its lyrics come) through up to ROW_HOLD of that, so it and the context line do
+  // not fold and come back. A pause folds it at once.
+  const ROW_HOLD = 1500;
+  let offSince = 0;
   function syncRow() {
-    const m = media === undefined ? undefined : lyricRow() ? 'lyric' : media === null ? 'idle' : 'off';   // undefined: no report yet
+    let m = media === undefined ? undefined : lyricRow() ? 'lyric' : media === null ? 'idle' : 'off';   // undefined: no report yet
+    if (rowMode === 'lyric' && m === 'off' && media?.status !== 'Paused' && !media?.changing) {
+      const now = performance.now();
+      if (!offSince) { offSince = now; setTimeout(kick, ROW_HOLD + 30); }
+      if (now - offSince < ROW_HOLD) m = 'lyric';
+    } else if (m === 'lyric') offSince = 0;
     if (m !== rowMode) { rowMode = m; rowSince = performance.now(); }
     return m;
   }
@@ -543,7 +604,8 @@ function createMusic(remote, t) {
       h.dataset.d = String(d); h.setAttribute('aria-hidden', 'true');
       h.innerHTML = `<svg viewBox="0 0 3 6"><path d="${d < 0 ? 'M2.6.5.4 3l2.2 2.5' : 'M.4.5 2.6 3 .4 5.5'}" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     }
-    capsule.addEventListener('wheel', (e) => {
+    // the wheel anywhere on the controls: the play / pause button lies on the capsule's cover, playing or paused
+    ctrl.addEventListener('wheel', (e) => {
       if (!media) return;
       e.preventDefault();
       const d = wheelSkip(e);
@@ -602,13 +664,14 @@ function createMusic(remote, t) {
     const img = s.querySelector('.dshmu-cover'), line = s.querySelector('.dshmu-line');
     if (img._src !== cover) { img._src = cover; if (cover) img.src = cover; img.hidden = !cover; }
     const l = i >= 0 ? lyrics.lines[i] : null;
-    if (line._l !== l || line._lyrics !== lyrics || (!l && line._title !== media.title)) {
-      const w0 = still ? 0 : line.parentElement.getBoundingClientRect().width;
-      line._l = l; line._lyrics = lyrics; line._title = media.title;
+    const showTr = settings.translation !== false;
+    if (line._l !== l || line._lyrics !== lyrics || (!l && line._title !== media.title) || line._tr !== showTr) {
+      const w0 = still ? 0 : ownWidth(line.parentElement);
+      line._l = l; line._lyrics = lyrics; line._title = media.title; line._tr = showTr;
       const words = el('dshmu-words');
       if (l) words.append(...wordSpans(l)); else words.textContent = [media.title, media.artist].filter(Boolean).join(' · ');
       line.replaceChildren(words);
-      if (l?.tr) { el('dshmu-sep', line).textContent = '·'; el('dshmu-tr', line).textContent = l.tr; }
+      if (l?.tr && showTr) { el('dshmu-sep', line).textContent = '·'; el('dshmu-tr', line).textContent = l.tr; }
       const newSong = line._song !== undefined && line._song !== song;
       line._song = song;
       line.classList.remove('dshmu-in', 'dshmu-from-r', 'dshmu-from-l');
@@ -620,10 +683,15 @@ function createMusic(remote, t) {
 
   // The lyric sits centred on the row, so a new line (or song) of another length would move its cover and both ends at
   // once: from the width it had, it glides to the new one instead (the CSS transition on width), then lets go.
+  // an element's width in its own px (the settings page's preview shows the row scaled down)
+  function ownWidth(e) {
+    const w = e.getBoundingClientRect().width, k = e.offsetWidth ? w / e.offsetWidth : 1;
+    return Math.abs(k - 1) < 0.02 ? w : e.offsetWidth;
+  }
   function glideWidth(e, w0) {
     clearTimeout(e._glide);
     e.style.width = '';
-    const w1 = e.getBoundingClientRect().width;
+    const w1 = ownWidth(e);
     if (!w0 || !w1 || Math.abs(w1 - w0) < 1 || reduced.matches) { e.removeAttribute('data-dshmu-glide'); return; }
     e.setAttribute('data-dshmu-glide', '');
     e.style.transition = 'none';
@@ -653,30 +721,236 @@ function createMusic(remote, t) {
     return h('span', { ref, className: 'dshmu-strip' });
   }
 
+  // ------------------------------------------------------------------ the settings page's preview
+  // DSH shows the plugin manager in the conversation's place, so the preview is a copy: of the window as it is (its
+  // sidebar and frame), with the conversation as it last looked put back where the page is. The conversation is
+  // copied every few seconds while it shows (one in progress preferred over a new session's), and the copy is
+  // cleaned of this plugin's own things, which then run live on it: a lyric row of its own in the composer row, the
+  // running indicator, the window's edge, the cover background, the ring in a new session. Its DSH markers are renamed
+  // so neither DSH nor this plugin takes it for the real page (an approval card in it does not hold the music down).
+  const pv = { active: null, hero: null, box: null, strip: null, edge: null, ring: null, card: null, bgc: null, bgl: null, ro: null };
+  // The copy leaves out what the preview drops anyway (shapeConversation): the chat's history and every message but
+  // the first, so a long conversation is not copied whole every few seconds.
+  function lightCopy(main, c) {
+    const column = [...c.querySelectorAll('[data-chat-flow]')].find((e) => !e.hasAttribute('data-step-process-content'));
+    const flow = column && (column.querySelector('[data-slot="conversation.chat.flow"]') ?? column);
+    const dropped = (e) => { const x = e.closest('[data-chat-history], [data-text-interaction-surface]'); return !!x && !!column?.contains(x); };
+    const bubble = flow && [...flow.querySelectorAll('[data-message-bubble]')].find((b) => !dropped(b));
+    const item = bubble?.closest('[data-chat-flow-kind]');
+    const keep = item && flow.contains(item) && item !== flow ? item : null;
+    const copy = (n) => {
+      if (n.nodeType === 1 && column?.contains(n) && n.matches('[data-chat-history], [data-text-interaction-surface]')) return null;
+      if (n === flow) { const f = n.cloneNode(false); if (keep) f.append(keep.cloneNode(true)); return f; }
+      const out = n.cloneNode(false);
+      for (const ch of n.childNodes) { const k = copy(ch); if (k) out.append(k); }
+      return out;
+    };
+    return copy(main);
+  }
+  function snapConversation() {
+    if (document.hidden) return;
+    const c = [...document.querySelectorAll('[data-conversation-content]')].find((e) => !embedded(e));
+    const main = c?.closest('[data-slot="main"]');
+    if (!main) return;
+    const phase = c.getAttribute('data-content-phase') ?? c.closest('[data-phase]')?.getAttribute('data-phase');
+    if (phase === 'hero') pv.hero = lightCopy(main, c);
+    else {
+      pv.active = lightCopy(main, c);
+      // DSH shows the session's title as "<title> — <product>": it is replaced in the copy
+      const dt = document.title, k = dt.lastIndexOf(' — ');
+      pv.title = k > 0 ? dt.slice(0, k).trim() : null;
+    }
+    const run = document.querySelector('[data-chat-running]:not([data-holding])');
+    if (run && !embedded(run)) pv.running = run.cloneNode(true);
+  }
+  // A running indicator as DSH draws it (RunningStatus, ui-chat), for when none has been seen yet: DSH's own CSS
+  // module classes, found by the one that only its running whale has.
+  const WHALE_PATH = 'M8.844 13.742C8.967 12.328 8.45 10.4 8.45 9.65C8.45 8.94 8.88 8.43 9.6 8.43C11.285 8.43 12.106 8.281 12.685 8.104C13.71 7.791 14.585 6.768 15.055 5.945C15.137 5.803 14.99 5.641 14.829 5.671C13.829 5.86 12.828 5.376 11.827 4.978C10.659 4.514 9.491 4.707 8.935 4.876C8.805 4.915 8.658 4.819 8.636 4.686C8.468 3.643 7.405 2.615 5.498 2.238C4.54 2.048 3.748 1.574 3.347 1.202C3.252 1.113 3.088 1.125 3.03 1.242C2.628 2.059 2.168 3.82 5.248 6.115C5.82 6.494 6.31 6.785 6.574 7.637C6.72 8.104 6.157 9.168 6.061 9.368C5.157 11.27 5.089 12.19 4.926 13.742';
+  function runningIndicator() {
+    let hash = null;
+    for (const sheet of document.styleSheets) {
+      let rules; try { rules = sheet.cssRules; } catch { continue; }
+      for (const r of rules) { const m = /\.([\w-]+)_runningWhaleAnimated(?![\w-])/.exec(r.selectorText ?? ''); if (m) { hash = m[1]; break; } }
+      if (hash) break;
+    }
+    if (!hash) return null;
+    const c = (n) => `${hash}_${n}`;
+    const run = el(c('running'), null, 'div');
+    run.innerHTML = `<span class="${c('runningDivider')}" aria-hidden="true"></span><span class="${c('runningContent')}"><span class="${c('runningIcon')}" aria-hidden="true">`
+      + `<span class="${c('runningWhaleAnimated')}"></span><svg class="${c('runningWhaleStill')}" width="100%" height="100%" viewBox="0 0 16 16" fill="none"><path d="${WHALE_PATH}" stroke="currentColor" stroke-width="1"/></svg>`
+      + `</span><span class="${c('runningText')}">Deep diving ···</span></span>`;
+    return run;
+  }
+  const textNodes = (root) => { const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), out = []; while (w.nextNode()) out.push(w.currentNode); return out; };
+  // The copied conversation keeps nothing of the real chat: one message of the preview's own (its title in place of
+  // the session's), and the AI at work on it, the running indicator after it.
+  function shapeConversation(copy) {
+    const msg = t('previewMessage');
+    if (pv.title) for (const n of textNodes(copy)) if (n.nodeValue.trim() === pv.title) n.nodeValue = msg;
+    // the sidebar's folders and sessions: made-up names (the selected session is the preview's message), no times
+    const made = t('previewSessions').split('|'), folders = t('previewFolders').split('|');
+    [...copy.querySelectorAll('[data-row-key^="workspace:"]')].forEach((row, i) => {
+      const title = row.querySelector('[class*="_title"]');
+      if (title) title.textContent = folders[i % folders.length];
+    });
+    [...copy.querySelectorAll('[data-row-key^="session:"]')].forEach((row, i) => {
+      const title = row.querySelector('[class*="_title"]') ?? row.querySelector(':scope > span:nth-of-type(2)');
+      if (title) title.textContent = /_selected(\s|$)/.test(row.className) ? msg : made[i % made.length];
+      for (const n of textNodes(row)) if (!title?.contains(n) && /^\s*\d+\s*[a-z\u4e00-\u9fff]{1,3}\s*$/i.test(n.nodeValue)) n.nodeValue = '';
+    });
+    const conv = copy.querySelector('[data-dshmu-pv-content]');
+    const column = conv && [...conv.querySelectorAll('[data-chat-flow]')].find((e) => !e.hasAttribute('data-step-process-content'));
+    if (!column) return;
+    column.querySelectorAll('[data-chat-history], [data-text-interaction-surface]').forEach((e) => e.remove());
+    const flow = column.querySelector('[data-slot="conversation.chat.flow"]') ?? column;
+    const item = flow.querySelector('[data-message-bubble]')?.closest('[data-chat-flow-kind]') ?? null;
+    flow.replaceChildren();
+    if (item) {
+      item.querySelectorAll('[data-message-attachments]').forEach((e) => e.remove());
+      item.querySelector('[data-message-bubble]').textContent = msg;
+      flow.append(item);
+    }
+    const run = pv.running?.cloneNode(true) ?? runningIndicator();
+    if (run) {
+      cleanCopy(run);
+      run.removeAttribute('data-chat-running'); run.removeAttribute('data-holding'); run.removeAttribute('aria-hidden');
+      for (const k of [...run.classList]) if (k.startsWith('dshmu-')) run.classList.remove(k);
+      run.setAttribute('data-dshmu-pv-running', '');
+      flow.append(run);
+    }
+  }
+  const snapTimer = setInterval(snapConversation, 3000);
+  if (globalThis.__dshmuTestHooks) Object.assign(globalThis.__dshmuTestHooks, { mountPreview, snapConversation });   // tools/samples/harness.html ?settings=1
+  const RENAME = { 'data-conversation-content': 'data-dshmu-pv-content', 'data-composer-card': 'data-dshmu-pv-card', 'data-chat-running': 'data-dshmu-pv-running' };
+  function cleanCopy(root) {
+    for (const e of [...root.querySelectorAll('*')]) {
+      const first = (e.getAttribute('class') ?? '').split(' ')[0];
+      if (first.startsWith('dshmu-') || e.matches('canvas, video, iframe, .dshm-whale')) { e.remove(); continue; }
+      for (const a of [...e.attributes]) {
+        if (a.name.startsWith('data-dshmu-') || ['id', 'data-approval-key', 'contenteditable', 'autofocus'].includes(a.name)) e.removeAttribute(a.name);
+        else if (RENAME[a.name]) { e.setAttribute(RENAME[a.name], a.value); e.removeAttribute(a.name); }
+      }
+      for (const c of [...(e.classList ?? [])]) if (c.startsWith('dshmu-')) e.classList.remove(c);
+      if (e.matches('a, button, input, textarea, select, [tabindex]')) e.setAttribute('tabindex', '-1');
+    }
+  }
+  function mountPreview(box) {
+    const app = document.querySelector('body > :has([data-shell-bottom])');
+    const src = pv.active ?? pv.hero;
+    const copy = app?.cloneNode(true), main = copy?.querySelector('[data-slot="main"]');
+    if (!src || !main) {
+      const none = el('dshmu-pv-none', null, 'div');
+      none.textContent = t('previewNone');
+      box.replaceChildren(none);
+      return () => box.replaceChildren();
+    }
+    main.replaceWith(src.cloneNode(true));
+    cleanCopy(copy);
+    shapeConversation(copy);
+    copy.classList.add('dshmu-pv-app');
+    copy.setAttribute('aria-hidden', 'true');
+    const W = Math.min(innerWidth, 960), H = Math.round(W * 0.46);
+    const frame = el('dshmu-pv', null, 'div'), back = el('dshmu-pv-bg', frame, 'div'), scale = el('dshmu-pv-scale', frame, 'div');
+    pv.bgc = el('', back, 'canvas'); el('dshmu-veil', back, 'div'); pv.bgl = back;
+    scale.style.width = `${W}px`; scale.style.height = `${H}px`;
+    scale.append(copy);
+    pv.edge = el('dshmu-pv-edge', scale, 'div');
+    // a lyric row of its own in the copied composer row (the real one's code paints it, hover and all)
+    const slot = copy.querySelector('[data-slot="conversation.composer.dock"]');
+    if (slot) { const st = el('dshmu-strip', null); slot.prepend(st); st._born = performance.now(); strips.add(st); pv.strip = st; }
+    // the ring round the copied composer, for a new session's look
+    pv.card = copy.querySelector('[data-content-phase="hero"] [data-dshmu-pv-card], [data-phase="hero"] [data-dshmu-pv-card]');
+    if (pv.card) {
+      pv.card.parentElement.style.position = 'relative';
+      pv.ring = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      pv.ring.setAttribute('class', 'dshmu-pv-ring');
+      pv.ring.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+      pv.card.parentElement.append(pv.ring);
+    }
+    box.replaceChildren(frame);
+    const fit = () => { const w = box.clientWidth; frame.style.height = `${Math.round((w * H) / W)}px`; scale.style.transform = `scale(${w / W})`; };
+    fit();
+    pv.ro = new ResizeObserver(fit); pv.ro.observe(box);
+    pv.box = box;
+    kick();
+    return () => {
+      pv.ro?.disconnect();
+      if (pv.strip) strips.delete(pv.strip);
+      Object.assign(pv, { box: null, strip: null, edge: null, ring: null, card: null, bgc: null, bgl: null, ro: null });
+      box.replaceChildren();
+    };
+  }
+  function paintPreview() {
+    if (!pv.box) return;
+    // the cover background: the real layer's picture, as strong as the real layer shows now
+    const real = bg?.layer;
+    const shown = real ? Number(real.style.opacity || 0) : 0;
+    pv.bgl.style.opacity = String(shown);
+    if (shown > 0) {
+      const from = real.querySelector('canvas');
+      if (pv.bgc.width !== from.width || pv.bgc.height !== from.height) { pv.bgc.width = from.width; pv.bgc.height = from.height; }
+      pv.bgc.getContext('2d').drawImage(from, 0, 0);
+    }
+    pv.edge.style.opacity = String(pv.card ? 0 : glow.edgeOpacity());
+    if (pv.ring) {
+      pv.ring.firstChild.setAttribute('d', glow.ringPath(pv.card));
+      pv.ring.style.opacity = media?.status === 'Playing' ? String(0.42 + 0.58 * glow.level()) : '0';
+    }
+  }
+  function Preview() {
+    const ref = React.useRef(null);
+    React.useEffect(() => mountPreview(ref.current), []);
+    return h('div', { ref, className: 'dshmu-pv-box' });
+  }
+
   // ------------------------------------------------------------------ settings page
+  // The lyric timing field. Held as typed: a number field reads "" while it holds "-" or "1." on the way to a number,
+  // and setting it from the saved value then would wipe what is being typed. Back to the saved value on leaving it.
+  function OffsetInput({ player, value, label }) {
+    const [text, setText] = React.useState(String(value));
+    React.useEffect(() => { setText((cur) => (cur !== '' && Number(cur) === value ? cur : String(value))); }, [player, value]);
+    return h(Input, { type: 'number', step: 100, value: text, 'aria-label': label,
+      onChange: (e) => {
+        const v = e.target.value;
+        setText(v);
+        if (v.trim() !== '' && Number.isFinite(Number(v))) setSettings({ offsets: { [player]: Math.round(Number(v)) } });
+      },
+      onBlur: () => setText(String(value)) });
+  }
   const useSettings = () => React.useSyncExternalStore((f) => { settingsListeners.add(f); return () => settingsListeners.delete(f); }, () => settings);
   function Settings({ view }) {
     const s = useSettings();
+    const [pick, setPick] = React.useState(null);   // the player whose lyric timing is shown
     const bgName = s.backdrop === 0 ? 'off' : s.backdrop < 0.26 ? 'light' : s.backdrop < 0.4 ? 'medium' : 'strong';
     if (view === 'summary') return MUSIC_CODING ? t('summary', { mc: s.musicCoding ? t('on') : t('off'), bg: t(bgName) }) : t('summaryBg', { bg: t(bgName) });
     const row = (label, hint, control) => h('div', { className: 'dshmu-row' },
       h('span', null, h('span', null, label), hint ? h('span', { className: 'dshmu-hint' }, hint) : null), control);
     const seg = (id, label, value, options, onChange) => h(SegmentedControl, { id: `dshmu-${id}`, label, value, options, onChange });
-    const players = Array.from(new Set(['Spotify', 'cloudmusic', 'QQMusic', ...Object.keys(s.offsets ?? {}), media?.proc].filter(Boolean)));
+    // the player playing now first, then those with a timing set, then the common ones
+    const players = Array.from(new Set([media?.proc, ...Object.keys(s.offsets ?? {}).filter((p) => s.offsets[p]), 'Spotify', 'cloudmusic', 'QQMusic', 'KuGou'].filter(Boolean)));
+    const player = players.includes(pick) ? pick : players[0];
+    const playerName = (p) => { const k = `player_${p}`, v = t(k); return v && v !== k ? v : p; };
+    const signed = (v) => `${v > 0 ? '+' : ''}${v}`;
+    const duck = Math.round((s.duck ?? 0.5) * 100);
     return h('div', { className: 'dshmu-set' },
+      view === 'page' && h(Preview),
       MUSIC_CODING && row(t('musicCoding'), t('musicCodingHint'), h(Switch, { checked: !!s.musicCoding, label: t('musicCoding'), onChange: (v) => setSettings({ musicCoding: v }) })),
       row(t('backdrop'), t('backdropHint'), seg('bg', t('backdrop'), bgName,
         ['off', 'light', 'medium', 'strong'].map((v) => ({ value: v, label: t(v) })),
         (v) => setSettings({ backdrop: { off: 0, light: 0.2, medium: 0.32, strong: 0.5 }[v] }))),
+      row(t('lyricsOn'), t('lyricsOnHint'), h(Switch, { checked: s.lyrics !== false, label: t('lyricsOn'), onChange: (v) => setSettings({ lyrics: v }) })),
+      row(t('translation'), t('translationHint'), h(Switch, { checked: s.translation !== false, disabled: s.lyrics === false, label: t('translation'), onChange: (v) => setSettings({ translation: v }) })),
       row(t('edgeGlow'), t('edgeGlowHint'), h(Switch, { checked: s.edgeGlow !== false, label: t('edgeGlow'), onChange: (v) => setSettings({ edgeGlow: v }) })),
-      row(t('duck'), null, seg('duck', t('duck'), String(s.duck ?? 0.5),
-        ['0.3', '0.5', '0.7'].map((v) => ({ value: v, label: `${Math.round(v * 100)}%` })), (v) => setSettings({ duck: Number(v) }))),
+      row(t('duck'), null, h('label', { className: 'dshmu-range' },
+        h('input', { type: 'range', min: 0, max: 100, step: 5, value: duck, 'aria-label': t('duck'), onChange: (e) => setSettings({ duck: Number(e.target.value) / 100 }) }),
+        h('span', null, `${duck}%`))),
       MUSIC_CODING && row(t('fadeIn'), null, seg('fade', t('fadeIn'), String(s.fadeIn ?? 8),
         ['5', '8', '10'].map((v) => ({ value: v, label: `${v}s` })), (v) => setSettings({ fadeIn: Number(v) }))),
       row(t('beat'), t('beatHint'), h(Switch, { checked: s.beat !== false, label: t('beat'), onChange: (v) => setSettings({ beat: v }) })),
-      row(t('offsets'), null, h('div', { className: 'dshmu-offsets' }, players.map((p) => h('label', { key: p }, p,
-        h(Input, { type: 'number', step: 100, value: s.offsets?.[p] ?? 0, 'aria-label': `${t('offsets')} ${p}`,
-          onChange: (e) => setSettings({ offsets: { [p]: Math.round(Number(e.target.value) || 0) } }) }))))),
+      row(t('offsets'), t('offsetsHint'), h('div', { className: 'dshmu-offsets' },
+        h('select', { className: 'dshmu-select', value: player, 'aria-label': t('offsetsPlayer'), onChange: (e) => setPick(e.target.value) },
+          players.map((p) => h('option', { key: p, value: p }, s.offsets?.[p] ? `${playerName(p)}（${signed(s.offsets[p])}）` : playerName(p)))),
+        h(OffsetInput, { player, value: s.offsets?.[player] ?? 0, label: `${t('offsets')} · ${playerName(player)}` }))),
       MUSIC_CODING && row(t('model'), t('modelHint'), h(Input, { value: s.moodModel ?? 'haiku', 'aria-label': t('model'), style: { width: 160 },
         onChange: (e) => setSettings({ moodModel: e.target.value || 'haiku' }) })),
     );
@@ -725,8 +999,13 @@ function createMusic(remote, t) {
     b.p = p;
     const e = smooth(p), html = document.documentElement;
     b.layer.style.opacity = String(e);
-    if (p > 0) { html.setAttribute('data-dshmu-bg', ''); html.style.setProperty('--dshmu-tint', `${100 - (100 - BG_TINT) * e}%`); }
-    else { html.removeAttribute('data-dshmu-bg'); html.style.removeProperty('--dshmu-tint'); }
+    if (p > 0) {
+      if (!html.hasAttribute('data-dshmu-bg')) { html.setAttribute('data-dshmu-bg', ''); dshmuCaption(); }
+      html.style.setProperty('--dshmu-tint', `${100 - (100 - BG_TINT) * e}%`);
+    } else {
+      if (html.hasAttribute('data-dshmu-bg')) { html.removeAttribute('data-dshmu-bg'); dshmuCaption(); }
+      html.style.removeProperty('--dshmu-tint');
+    }
   }
   function bgFade(b, to, ms) {
     b.to = to; b.rate = reduced.matches ? Infinity : 1 / ms;
@@ -757,6 +1036,7 @@ function createMusic(remote, t) {
     return b;
   }
   function background() {
+    if (lifetime.signal.aborted) return;   // stopped: the next instance owns the layer now
     const html = document.documentElement;
     const strength = settings.backdrop ?? 0.32;
     html.style.setProperty('--dshmu-bg-strength', String(strength));
@@ -788,7 +1068,7 @@ function createMusic(remote, t) {
   function frame(now) {
     raf = 0;
     const dt = Math.min(50, lastFrame ? now - lastFrame : 0); lastFrame = now;
-    const hosts = [...indicators()].filter((e) => !embedded(e));
+    const hosts = [...indicators(), ...(pv.box ? pv.box.querySelectorAll('[data-dshmu-pv-running]') : [])].filter((e) => !embedded(e));
     const on = playing();
     const pos = on ? position() : 0, i = on ? lineAt(pos) : -1;
     if (hosts.length) {
@@ -804,10 +1084,11 @@ function createMusic(remote, t) {
       if (s._bars && s.dataset.play === 'playing' && !reduced.matches
         && (s.dataset.mode !== 'lyric' || s.closest('[data-composer-dock]')?.matches(':hover, :focus-within'))) { s._bars.step(dt, true); bars = true; }
     }
-    if ((on && (hosts.length || strips.size)) || moving || bars) raf = requestAnimationFrame(frame);
+    paintPreview();
+    if ((on && (hosts.length || strips.size)) || moving || bars || (pv.box && media?.status === 'Playing')) raf = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
-  function kick() { if (!raf) raf = requestAnimationFrame(frame); }
+  function kick() { if (!raf && !lifetime.signal.aborted) raf = requestAnimationFrame(frame); }   // a late timer after stop: nothing
 
   // ------------------------------------------------------------------ the tail to the beat (tail.js, when built in)
   const tail = typeof createTail === 'function'
@@ -868,16 +1149,18 @@ function createMusic(remote, t) {
     document.removeEventListener('input', onInput, true);
     clearInterval(typingTimer);
     clearTimeout(gone);
-    if (raf) cancelAnimationFrame(raf);
+    clearTimeout(wantTimer);
+    cancelAnimationFrame(raf); raf = 0;
     document.querySelectorAll('.dshmu-ts').forEach((e) => e.remove());
     document.querySelectorAll('.dshmu-on').forEach((e) => e.classList.remove('dshmu-on'));
     for (const s of strips) { delete s.dataset.mode; s.replaceChildren(); }
+    clearInterval(snapTimer);
     ctxLine.dispose();
     island?.dispose();
     glow.dispose();
     tail?.dispose();
     const html = document.documentElement;
-    const clear = () => { style.remove(); html.removeAttribute('data-dshmu-bg'); html.style.removeProperty('--dshmu-tint'); html.style.removeProperty('--dshmu-bg-strength'); };
+    const clear = () => { style.remove(); html.removeAttribute('data-dshmu-bg'); html.style.removeProperty('--dshmu-tint'); html.style.removeProperty('--dshmu-bg-strength'); dshmuCaption(); };
     const b = bg;
     bg = null;
     if (!b) { clear(); return; }

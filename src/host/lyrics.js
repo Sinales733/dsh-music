@@ -112,14 +112,42 @@ export function parseQrc(text) {
   return out;
 }
 
+/** KuGou KRC: [start,dur]<ws,wd,0>word<ws,wd,0>word  — timing before each word, from the line's start. */
+export function parseKrc(text) {
+  const out = [];
+  for (const raw of (text ?? '').split(/\r?\n/)) {
+    const m = /^\[(\d+),(\d+)\](.*)$/.exec(raw.trim());
+    if (!m) continue;
+    const t = +m[1], w = [];
+    const marks = [...m[3].matchAll(/<(\d+),(\d+),-?\d+>/g)];
+    marks.forEach((k, i) => {
+      const s = m[3].slice(k.index + k[0].length, marks[i + 1]?.index ?? m[3].length);
+      if (s) w.push([t + +k[1], +k[2], s]);
+    });
+    out.push({ t, d: +m[2], text: w.map((x) => x[2]).join(''), w });
+  }
+  return out;
+}
+/** A KRC's translation (its [language:] tag, base64 JSON, one row per KRC line) as LRC timed like those lines. */
+function krcTranslation(text, lines) {
+  try {
+    const tag = /^\[language:([^\]]*)\]/m.exec(text ?? '');
+    const rows = tag && JSON.parse(Buffer.from(tag[1], 'base64').toString('utf8')).content?.find((c) => c.type === 1)?.lyricContent;
+    if (!rows) return '';
+    const stamp = (t) => `[${String(Math.floor(t / 60000)).padStart(2, '0')}:${(t % 60000 / 1000).toFixed(2).padStart(5, '0')}]`;
+    return rows.map((r, i) => (lines[i] && r.join('').trim() ? stamp(lines[i].t) + r.join('').trim() : '')).filter(Boolean).join('\n');
+  } catch { return ''; }
+}
+
 /** Drop credits, claims and a leading "title - artist" line, fill in line lengths, attach a translation, flag instrumentals. */
 function finish(lines, trText, synced, track) {
   const title = track?.title ? normName(track.title) : null;
   lines = lines.filter((l, i) => {
     if (!l.text || CREDIT.test(l.text) || CLAIM.test(l.text)) return false;
     if (i > 2 || !title) return true;
-    const s = normName(l.text);
-    return !(s.includes(title) && (/ [-–—] /.test(s) || track.artists.some((a) => s.includes(a.toLowerCase()))));
+    const s = normName(l.text), head = s.split(/ [-–—] /)[0].trim();
+    const named = s.includes(title) || (head.length === title.length && [...head].filter((c, k) => c === title[k]).length >= title.length / 2);
+    return !(named && (/ [-–—] /.test(s) || track.artists.some((a) => s.includes(a.toLowerCase()))));
   });
   const instrumental = lines.length === 0 || (lines.length === 1 && INSTRUMENTAL.test(lines[0].text.trim()));
   if (instrumental) return { synced: 'none', instrumental: true, lines: [] };
@@ -131,6 +159,15 @@ function finish(lines, trText, synced, track) {
     if (Math.abs(lines[j].t - l.t) <= 1500 && !lines[j].tr) lines[j].tr = l.text;
   }
   return { synced, instrumental: false, lines };
+}
+
+// ------------------------------------------------------------------------------------------------- KuGou KRC decoding
+// "krc1", then the rest XORed with a fixed 16-byte key, then zlib (as Lyricify Lyrics Helper's Decrypter/Krc).
+const KRC_KEY = [64, 71, 97, 119, 94, 50, 116, 71, 81, 54, 49, 45, 206, 210, 110, 105];
+export function decodeKrc(b64) {
+  const b = Buffer.from(b64 ?? '', 'base64').subarray(4);
+  for (let i = 0; i < b.length; i++) b[i] ^= KRC_KEY[i % 16];
+  return zlib.inflateSync(b).toString('utf8');
 }
 
 // ------------------------------------------------------------------------------------------------- QQ QRC decoding
@@ -258,7 +295,9 @@ const PROVIDERS = {
       });
       const b = await http(`https://u.y.qq.com/cgi-bin/musics.fcg?sign=${zzcSign(body)}`, { method: 'POST', body, headers: { 'user-agent': 'QQMusic 14090508(android 12)' }, directFirst: true });
       return (b?.req?.data?.body?.song?.list ?? [])
-        .map((s) => ({ id: s.id, title: s.title, artists: (s.singer ?? []).map((a) => a.name), album: s.album?.name, dur: (s.interval ?? 0) * 1000 }));
+        .map((s) => ({ id: s.id, title: s.title, artists: (s.singer ?? []).map((a) => a.name), album: s.album?.name, dur: (s.interval ?? 0) * 1000,
+          // the minute QQ Music plays without a membership (its preview), in ms of the song
+          clip: s.file?.e_30s > (s.file?.b_30s ?? 0) ? [s.file.b_30s ?? 0, s.file.e_30s] : null }));
     },
     async lyrics({ id }, t) {
       const body = JSON.stringify({
@@ -277,11 +316,37 @@ const PROVIDERS = {
       return finish(l, tr, l.length ? 'line' : 'none', t);
     },
   },
+  // KuGou's lyric library, searched by name and the song's length (it ranks by length): the player's own cut when
+  // the player is KuGou, and many live and other cuts besides
+  kugou: {
+    async search(q, track) {
+      // it finds "<artist> - <name>" and little else: a name with "(Edit)", "(Live)" … is tried without it as well
+      const who = track.artists.join('、');
+      const plain = track.title.replace(/\s*[(（[【].*?[)）\]】]\s*/g, ' ').trim();
+      for (const name of [...new Set([track.title, plain])].filter(Boolean)) {
+        const p = new URLSearchParams({ ver: '1', man: 'yes', client: 'pc', keyword: who ? `${who} - ${name}` : name, hash: '' });
+        if (track.dur > 0) p.set('duration', String(Math.round(track.dur)));
+        const b = await http(`https://lyrics.kugou.com/search?${p}`, { directFirst: true });
+        if (b?.candidates?.length) return b.candidates.slice(0, 10).map((c) => ({ id: c.id, accesskey: c.accesskey, title: c.song, artists: splitArtists(c.singer), dur: c.duration }));
+      }
+      return [];
+    },
+    async lyrics(c, t) {
+      const p = new URLSearchParams({ ver: '1', client: 'pc', id: String(c.id), accesskey: c.accesskey, fmt: 'krc', charset: 'utf8' });
+      const b = await http(`https://lyrics.kugou.com/download?${p}`, { directFirst: true });
+      if (!b?.content) throw new Error(`kugou: ${b?.info ?? 'no content'}`);
+      const text = decodeKrc(b.content), words = parseKrc(text);
+      if (words.length) return finish(words, krcTranslation(text, words), 'word', t);
+      const l = parseLrc(text);
+      return finish(l, '', l.length ? 'line' : 'none', t);
+    },
+  },
   lrclib: {
     async search(q, track) {
       const p = new URLSearchParams({ track_name: track.title, artist_name: track.artists[0] ?? '' });
       const list = await http(`https://lrclib.net/api/search?${p}`, { headers: { 'user-agent': 'dsh-music (DeepSeek Harness plugin)' } });
-      return (Array.isArray(list) ? list : []).slice(0, 10).map((s) => ({
+      // entries with only plain (untimed) lyrics are no use here: leave them out rather than take them for silence
+      return (Array.isArray(list) ? list : []).filter((s) => s.syncedLyrics || s.instrumental).slice(0, 10).map((s) => ({
         id: s.id, title: s.trackName, artists: splitArtists(s.artistName), album: s.albumName, dur: (s.duration ?? 0) * 1000,
         synced: s.syncedLyrics, plain: s.plainLyrics, instrumental: s.instrumental,
       }));
@@ -360,16 +425,103 @@ export function matchScore(track, c) {
   return ((n + ar + (al ?? 0) * 0.4 + (du ?? 0)) * full) / avail;
 }
 
+// ------------------------------------------------------------------------------------------------- alignment
+// Word-synced lyrics from NetEase or QQ are timed to those services' own cut of the song. The player may play another
+// cut (Spotify's 雨愛 has an intro about 2 s longer), which puts every line early or late by the same amount.
+// LRCLIB's timings mostly come from the streaming services' cuts, so when its best match for the song (a cut of
+// about the same length as the player's) agrees with the chosen lyrics line by line except for one steady shift,
+// the chosen lyrics move by that shift, word timing and all. Not for a player's own service (QQ Music with QQ's
+// lyrics; NetEase Cloud Music names its song and never gets here).
+const lineText = (s) => (s ?? '').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+// the service of the player itself: its lyrics are timed to the very cut it plays
+const ownSource = (src, track) => (src === 'qq' && /qqmusic/i.test(track.app ?? '')) || (src === 'kugou' && /kugou/i.test(track.app ?? ''));
+function sameLine(a, b) {
+  if (a.length < 2 || b.length < 2) return false;
+  if (a === b) return true;
+  if (a.length === b.length) {          // the same line in the other script (繁/简): most characters equal
+    let same = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+    if (same / a.length >= 0.5) return true;
+  }
+  return similarity(a, b) >= 70;
+}
+/** The steady shift (ms, to add to `a`) that puts lines of `a` on the same lines of `b`; null when there is none. */
+export function steadyShift(a, b) {
+  const bt = b.map((l) => ({ t: l.t, s: lineText(l.text) }));
+  const d = [];
+  let from = 0, sung = 0;
+  for (const l of a) {
+    const s = lineText(l.text);
+    if (s.length < 2) continue;
+    sung++;
+    let best = -1;
+    for (let k = from; k < bt.length && bt[k].t <= l.t + 10000; k++) {
+      if (bt[k].t < l.t - 10000 || !sameLine(s, bt[k].s)) continue;
+      if (best < 0 || Math.abs(bt[k].t - l.t) < Math.abs(bt[best].t - l.t)) best = k;
+    }
+    if (best >= 0) { d.push(bt[best].t - l.t); from = best + 1; }
+  }
+  if (d.length < 4 || d.length < sung * 0.4) return null;
+  const median = (x) => { const y = [...x].sort((p, q) => p - q); return y[y.length >> 1]; };
+  const m = median(d), spread = median(d.map((x) => Math.abs(x - m)));
+  return spread <= 300 ? Math.round(m / 10) * 10 : null;
+}
+function aligned(chosen, track, cands) {
+  if (chosen.src === 'lrclib' || chosen.synced !== 'word' || chosen.instrumental) return chosen;
+  if (ownSource(chosen.src, track)) return chosen;
+  const ref = cands.find((c) => c.src === 'lrclib' && c.synced && (!track.dur || !c.dur || Math.abs(c.dur - track.dur) <= 3000));
+  if (!ref) return chosen;
+  const shift = steadyShift(chosen.lines, parseLrc(ref.synced));
+  if (shift === null || Math.abs(shift) < 300) return chosen;
+  return { ...chosen, shift, lines: chosen.lines.map((l) => ({ ...l, t: l.t + shift, ...(l.w ? { w: l.w.map(([t, d, s]) => [t + shift, d, s]) } : {}) })) };
+}
+
+// QQ Music without a membership plays a minute of many songs (the preview in its catalogue, b_30s..e_30s) and
+// reports that minute as the whole song, from 0. When the best QQ match has a preview that long, the lyrics move so
+// the preview's start is 0 (lines before it fall below 0: the one sung as it starts shows first).
+const qqPreview = (track) => /qqmusic/i.test(track.app ?? '') && track.dur >= 25000 && track.dur <= 61000;
+function clipped(ly, track, cands) {
+  if (!ly?.lines?.length || !qqPreview(track)) return ly;
+  // the best QQ match whose preview is this long (the same song can be listed twice, with other previews)
+  const q = cands.find((c) => c.src === 'qq' && c.clip && c.dur - track.dur >= 5000 && Math.abs(c.clip[1] - c.clip[0] - track.dur) <= 1500);
+  if (!q) return ly;
+  const b = q.clip[0];
+  return { ...ly, clip: q.clip, lines: ly.lines.map((l) => ({ ...l, t: l.t - b, ...(l.w ? { w: l.w.map(([t, d, s]) => [t - b, d, s]) } : {}) })) };
+}
+
+// ------------------------------------------------------------------------------------------------- live cuts
+// A live recording is sung to its own timing: lyrics timed to the studio cut (or another concert) drift from the
+// first line on, and no steady shift puts them right. For a live cut only lyrics of a live cut about as long count;
+// LRCLIB entries whose timing is the very same as another cut's (a studio one, or one of another length) were copied
+// over, and do not. With none, the song is shown by its name: NAME_ONLY.
+const LIVE_TITLE = /[(\[（【]\s*live\b|[-–—]\s*live\b|现场|現場/i;
+const LIVE_ALBUM = /演唱會|演唱会|音樂會|音乐会|巡迴|巡回|現場|现场|\blive\b|concert|unplugged/i;
+const isLive = (x) => LIVE_TITLE.test(x.title ?? '') || LIVE_ALBUM.test(x.album ?? '');
+const NAME_ONLY = { src: 'none', synced: 'none', instrumental: false, nameOnly: 'live', lines: [] };
+const timing = (c) => (c.timing ??= parseLrc(c.synced).map((l) => Math.round(l.t / 100)).join(','));
+const copied = (c, all) => c.src === 'lrclib' && !!c.synced && all.some((x) => x !== c && x.src === 'lrclib' && x.synced
+  && (!isLive(x) || Math.abs(x.dur - c.dur) > 5000) && timing(x) === timing(c));
+function liveFit(c, t, track, all) {
+  if (ownSource(c.src, track)) return !t.dur || !c.dur || Math.abs(c.dur - t.dur) <= 1000;   // the player's own cut
+  return isLive(c) && (!t.dur || !c.dur || Math.abs(c.dur - t.dur) <= 3000) && !copied(c, all);
+}
+
 // ------------------------------------------------------------------------------------------------- entry
-const PREFER = { netease: 0, qq: 1, lrclib: 2 };   // on a tie, word-synced sources first
+const PREFER = { netease: 0, qq: 1, kugou: 2, lrclib: 3 };   // on a tie, word-synced sources first
 
 /**
- * @param track {title, artist, album, dur} as the player reports them; `ncmId` when NetEase Cloud Music says which
- *   song it is playing, which skips the search for that source. Returns lyrics, or null when every source answered
+ * @param track {title, artist, album, dur} as the player reports them, `app` the player's media app id; `ncmId` when
+ *   NetEase Cloud Music says which song it is playing, which skips the search for that source. Lyrics moved to the
+ *   player's cut of the song (see aligned) carry `shift`, the ms they moved. Returns lyrics, or null when every source answered
  *   and none has them; throws when nothing was found and some source could not be reached (worth trying again).
+ * @param onUpdate called once more, later, with better lyrics for the same song: the ones returned moved to LRCLIB's
+ *   timing, when LRCLIB answered too late to be waited for.
  */
-export async function findLyrics(track, { sources = Object.keys(PROVIDERS), log } = {}) {
-  const t = { title: track.title ?? '', artists: splitArtists(track.artist), album: track.album, dur: track.dur };
+// Once some source has a sure match, a slower one gets LATE_MS more before the lyrics go ahead without it.
+const SURE = 19, LATE_MS = 1500;
+export async function findLyrics(track, { sources = Object.keys(PROVIDERS), log, onUpdate } = {}) {
+  // a QQ Music preview reports the preview's length, not the song's: matched without a length
+  const t = { title: track.title ?? '', artists: splitArtists(track.artist), album: track.album, dur: qqPreview(track) ? undefined : track.dur };
   let failed = 0;                 // sources that could not be reached (as opposed to having nothing)
   if (track.ncmId) {
     try {
@@ -379,26 +531,88 @@ export async function findLyrics(track, { sources = Object.keys(PROVIDERS), log 
   }
   if (!t.title) { if (failed) throw new Error('lyrics: NetEase could not be reached'); return null; }
   const q = `${t.title} ${t.artists[0] ?? ''}`.trim();
-  const found = await Promise.allSettled(sources.map(async (src) =>
-    (await PROVIDERS[src].search(q, t)).map((c) => ({ ...c, src, score: matchScore(t, c) }))));
-  found.forEach((r, i) => { if (r.status === 'rejected') { failed++; log?.(`${sources[i]} search failed: ${r.reason?.cause?.message ?? r.reason?.message ?? r.reason}`); } });
-  const cands = found.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
-    .filter((c) => c.score > 11)
-    .sort((a, b) => b.score - a.score || PREFER[a.src] - PREFER[b.src]);
+  // As Lyricify's Searcher: a source with no match for name and artist is searched again by the name alone, without
+  // "(feat. …)" (a catalogue that writes the artist another way: 周杰倫 for 周杰伦)
+  const bare = t.title.replace(/\s*(\(feat\.|- feat\.).*$/i, '').trim();
+  const live = isLive(track);
+  const searches = sources.map(async (src) => {
+    const scored = async (query) => (await PROVIDERS[src].search(query, t)).map((c) => ({ ...c, src, score: matchScore(t, c) }));
+    const first = await scored(q);
+    if (first.some((c) => c.score > 11) || !bare || bare === q || src === 'lrclib') return first;
+    try { return [...first, ...(await scored(bare)).filter((c) => !first.some((f) => f.id === c.id))]; } catch { return first; }
+  });
+  // every source's answer, except that once one has a sure match (and the player's own service, if any, has answered),
+  // the others get LATE_MS more; a live cut waits for all (it takes only a fitting cut, which any of them may have)
+  const answers = new Array(sources.length);
+  const counted = new Set();
+  const settle = (i) => {
+    if (counted.has(i) || !answers[i]) return;
+    counted.add(i);
+    if (!answers[i].ok) { failed++; log?.(`${sources[i]} search failed: ${answers[i].e?.cause?.message ?? answers[i].e?.message ?? answers[i].e}`); }
+  };
+  await new Promise((resolve) => {
+    let left = searches.length, timer = 0;
+    const check = () => {
+      if (!left) { clearTimeout(timer); resolve(); return; }
+      if (timer || live) return;
+      const sure = answers.some((a) => a?.ok && a.value.some((c) => c.score >= SURE));
+      const ownWaiting = sources.some((src, i) => !answers[i] && ownSource(src, track));
+      if (sure && !ownWaiting) timer = setTimeout(resolve, LATE_MS);
+    };
+    searches.forEach((p, i) => p.then((value) => { answers[i] = { ok: true, value }; left--; check(); },
+      (e) => { answers[i] = { ok: false, e }; left--; check(); }));
+  });
+  const late = sources.filter((src, i) => !answers[i]);
+  if (late.length) log?.(`went ahead without ${late.join(', ')} (slow)`);
+  const candidates = () => {
+    sources.forEach((src, i) => settle(i));
+    const all = answers.flatMap((a) => (a?.ok ? a.value : []));
+    return { all, cands: all.filter((c) => c.score > 11 && (!live || liveFit(c, t, track, all)))
+      .sort((a, b) => b.score - a.score || PREFER[a.src] - PREFER[b.src]) };
+  };
   const get = async (c) => {
     try {
       const ly = await PROVIDERS[c.src].lyrics(c, t);
       return ly.instrumental || ly.lines.length ? { src: c.src, id: c.id, match: Math.round(c.score * 10) / 10, ...ly } : null;
     } catch (e) { failed++; log?.(`${c.src} lyrics failed: ${e?.cause?.message ?? e?.message ?? e}`); return null; }
   };
-  // Fetch the best match from every source at once; among those within 3 points of the best, word-synced wins.
-  const firsts = Object.keys(PREFER).map((src) => cands.find((c) => c.src === src)).filter(Boolean);
-  const best = firsts[0] ? Math.max(...firsts.map((c) => c.score)) : 0;
-  const got = (await Promise.all(firsts.filter((c) => c.score >= best - 3).map(get))).filter(Boolean);
+  const tried = new Set();
   const rank = (r) => (r.instrumental ? 1 : r.synced === 'word' ? 3 : r.synced === 'line' ? 2 : 0);
-  got.sort((a, b) => rank(b) - rank(a) || b.match - a.match);
-  if (got[0]) return got[0];
-  for (const c of cands.filter((c) => !firsts.includes(c)).slice(0, 3)) { const r = await get(c); if (r) return r; }
+  async function pick(cands) {
+    // Fetch the best match from every source at once; among those within 3 points of the best, word-synced wins.
+    const firsts = Object.keys(PREFER).map((src) => cands.find((c) => c.src === src)).filter((c) => c && !tried.has(c));
+    const best = firsts[0] ? Math.max(...firsts.map((c) => c.score)) : 0;
+    const now = firsts.filter((c) => c.score >= best - 3 || ownSource(c.src, track));
+    now.forEach((c) => tried.add(c));
+    const got = (await Promise.all(now.map(get))).filter(Boolean);
+    // the player's own service first (its lyrics fit its cut), then word-synced, then the better match
+    got.sort((a, b) => ownSource(b.src, track) - ownSource(a.src, track) || rank(b) - rank(a) || b.match - a.match);
+    if (got[0]) return got[0];
+    // none of those had any: the next best, every source's first included (a lower-scoring source may still have them)
+    for (const c of cands.filter((c) => !tried.has(c)).slice(0, 4)) { tried.add(c); const r = await get(c); if (r) return r; }
+    return null;
+  }
+  let { cands } = candidates();
+  let chosen = await pick(cands);
+  if (!chosen && late.length) {          // nothing among those that answered in time: wait for the slow ones after all
+    await Promise.allSettled(searches);
+    ({ cands } = candidates());
+    chosen = await pick(cands);
+  }
+  if (chosen) {
+    const out = clipped(aligned(chosen, track, cands), track, cands);
+    // LRCLIB came too late to check the timing against it: check when it comes, and send the moved lyrics then
+    const li = sources.indexOf('lrclib');
+    if (onUpdate && !out.shift && li >= 0 && !answers[li] && chosen.synced === 'word' && !ownSource(chosen.src, track)) {
+      searches[li].then((list) => {
+        const ref = list.map((c) => ({ ...c, src: 'lrclib', score: matchScore(t, c) }));
+        const moved = aligned(chosen, track, ref);
+        if (moved.shift) onUpdate(clipped(moved, track, cands));
+      }, () => {});
+    }
+    return out;
+  }
+  if (live && !cands.length && !failed) return NAME_ONLY;
   if (failed) throw new Error(`lyrics: ${failed} source${failed > 1 ? 's' : ''} could not be reached`);
-  return null;
+  return live ? NAME_ONLY : null;
 }

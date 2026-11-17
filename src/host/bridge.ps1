@@ -11,12 +11,15 @@
 # Closing stdin also quits. On quit every volume this bridge changed is put back.
 # Core Audio interface layouts follow NAudio (MIT, https://github.com/naudio/NAudio).
 param(
-    [string]$Players = 'Spotify|cloudmusic|NetEase|QQMusic|AppleMusic|Apple\.Music|foobar|Kugou|KuGou',
+    # music players by their media id (a program's name, or a Store app's id); others only with -AnyApp
+    [string]$Players = 'Spotify|cloudmusic|NetEase|QQMusic|AppleMusic|Apple\.Music|foobar|Kugou|KuGou|SodaMusic|kwmusic|bodian|TIDAL|WiMPMusic|Deezer|Amazon ?Music|youtube-music|YouTube Music|music\.youtube\.com|Cider|MusicBee|AIMP|iTunes|Qobuz|ZuneMusic|Media\.Player|Salt Player|Winamp|Dopamine|Feishin|plexamp|SoundCloud|Musicloud|lx-music|MusicPlayer2|HyPlayer|LyricEase',
     [string]$MicApps = 'Typeless',
     [string]$CoverDir = (Join-Path $env:TEMP 'dsh-music'),
     [switch]$AnyApp
 )
 $ErrorActionPreference = 'Stop'
+# Soda Music reports its Chinese name (char codes: Windows PowerShell reads this file as ANSI)
+if ($PSBoundParameters.Keys -notcontains 'Players') { $Players += '|' + (-join [char[]](0x6C7D, 0x6C34, 0x97F3, 0x4E50)) }
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $stdout = New-Object System.IO.StreamWriter ([Console]::OpenStandardOutput()), $utf8
 $stdout.AutoFlush = $true
@@ -131,15 +134,22 @@ namespace DshMusic {
     // Events (drained by the script): "b:<strength>" per beat, "t:<bpm>:<activity>:<beats per s>" every 2 s.
     public static class Beat {
         public static readonly System.Collections.Concurrent.ConcurrentQueue<string> Events = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        static System.Threading.Thread thread;
+        static System.Threading.Thread thread, previous;
         static volatile bool run;
+        static volatile int gen;      // each start's number: a thread whose number is not the latest stops
         public static bool Running { get { return thread != null; } }
         public static void Start() {
             if (thread != null) return;
             run = true;
-            thread = new System.Threading.Thread(Loop); thread.IsBackground = true; thread.Start();
+            int my = ++gen;
+            var old = previous;
+            // the one before it may still be finishing its last packet: let it go first (it stops within ~0.1 s)
+            thread = new System.Threading.Thread(() => { if (old != null) old.Join(1000); Loop(my); });
+            thread.IsBackground = true; thread.Start();
+            previous = thread;
         }
         public static void Stop() { run = false; thread = null; }
+        static bool Live(int my) { return run && my == gen; }
 
         struct Biquad {
             double b0, b1, b2, a1, a2, z1, z2;
@@ -228,15 +238,15 @@ namespace DshMusic {
             Events.Enqueue("t:" + Math.Round(bpm).ToString(inv) + ":" + activity.ToString("0.000", inv) + ":" + (beats.Count / 16.0).ToString("0.00", inv));
         }
 
-        static void Loop() {
-            while (run) {
-                try { Capture(); } catch (Exception e) { Events.Enqueue("e:" + e.Message); }
-                for (int i = 0; i < 20 && run; i++) System.Threading.Thread.Sleep(100);
+        static void Loop(int my) {
+            while (Live(my)) {
+                try { Capture(my); } catch (Exception e) { Events.Enqueue("e:" + e.Message); }
+                for (int i = 0; i < 20 && Live(my); i++) System.Threading.Thread.Sleep(100);
             }
         }
         static void Check(int hr) { if (hr < 0) Marshal.ThrowExceptionForHR(hr); }
 
-        static void Capture() {
+        static void Capture(int my) {
             var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
             IMMDevice dev; Check(en.GetDefaultAudioEndpoint(0, 1, out dev));
             Guid iid = typeof(IAudioClient).GUID; object o;
@@ -254,7 +264,7 @@ namespace DshMusic {
             float[] fbuf = new float[0]; short[] sbuf = new short[0];
             Check(ac.Start());
             try {
-                while (run) {
+                while (Live(my)) {
                     uint n; Check(cc.GetNextPacketSize(out n));
                     if (n == 0) { System.Threading.Thread.Sleep(8); continue; }
                     IntPtr data; uint frames, flags; ulong dp, qp;
@@ -271,6 +281,137 @@ namespace DshMusic {
                     Check(cc.ReleaseBuffer(frames));
                 }
             } finally { ac.Stop(); Marshal.ReleaseComObject(cc); Marshal.ReleaseComObject(ac); }
+        }
+    }
+
+    // KuGou tells Windows its song but no place in it, and no artist. For the builds whose memory layout is known, the
+    // place, the length and play/pause are read out of its memory (read only), the artist out of its window's title.
+    // Layouts from AF Media Bar (MIT, github.com/Fervent-Tempo/AF-Media-Bar, Sources/KuGou/KuGouBuildProfile.cs),
+    // found there with Cheat Engine; for any other build nothing is read (the host keeps its own clock).
+    public static class KuGou {
+        [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+        [DllImport("kernel32.dll")] static extern bool ReadProcessMemory(IntPtr h, IntPtr addr, byte[] buf, IntPtr n, out IntPtr read);
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+        delegate bool EnumProc(IntPtr w, IntPtr p);
+        [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr p);
+        [DllImport("user32.dll")] static extern int GetWindowThreadProcessId(IntPtr w, out int pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr w, System.Text.StringBuilder s, int n);
+        [DllImport("user32.dll")] static extern int GetWindowLongW(IntPtr w, int i);
+        [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr w, int c);
+
+        class Layout { public string Player, Main; public long PlayerSize, MainSize, Pos, DurRoot, Graph; public long[] DurChain; public int DurUnits; }
+        // kgplayer.dll holds the place (seconds, a double) and the DirectShow graph (its state: 1 paused, 2 playing),
+        // kugou.dll the pointer chain to the length
+        static readonly Layout[] Known = {
+            new Layout { Player = "1.2.0.523", Main = "20.1.61.28014", PlayerSize = 4587520, MainSize = 39858176,
+                Pos = 0x3949F8, DurRoot = 0x024363D8, DurChain = new long[] { 0x30, 0x118 }, Graph = 0x3956C8, DurUnits = 1000 },
+            new Layout { Player = "1.2.0.519", Main = "20.1.51.27974",
+                Pos = 0x3929D8, DurRoot = 0x023C7B68, DurChain = new long[] { 0x70, 0x30, 0x0, 0x24 }, Graph = 0x3936A8, DurUnits = 1 },
+            new Layout { Player = "1.2.0.519", Main = "20.1.51.27972",
+                Pos = 0x3929D8, DurRoot = 0x023C9B68, DurChain = new long[] { 0x70, 0x30, 0x0, 0x24 }, Graph = 0x3936A8, DurUnits = 1 },
+        };
+        static IntPtr handle = IntPtr.Zero, window = IntPtr.Zero;
+        static Process proc;
+        static long playerBase, mainBase, quartzBase, quartzSize;
+        static Layout layout;
+        static int nextTry = Environment.TickCount;
+        // "KuGou Music" in Chinese, as its windows are named (char codes: PowerShell 5.1 reads this file as ANSI)
+        public static readonly string Name = new string(new[] { (char)0x9177, (char)0x72D7, (char)0x97F3, (char)0x4E50 });
+        public static string Build = "";   // what was found, for the log: "20.1.61.28014", or "unknown 20.1.70.x / 1.2.0.x"
+
+        static bool Read(long addr, byte[] b) { IntPtr n; return ReadProcessMemory(handle, (IntPtr)addr, b, (IntPtr)b.Length, out n) && (long)n == b.Length; }
+        static bool I64(long addr, out long v) { var b = new byte[8]; v = 0; if (!Read(addr, b)) return false; v = BitConverter.ToInt64(b, 0); return true; }
+        static bool I32(long addr, out int v) { var b = new byte[4]; v = 0; if (!Read(addr, b)) return false; v = BitConverter.ToInt32(b, 0); return true; }
+        static string Ver(FileVersionInfo f) { return f.FileMajorPart + "." + f.FileMinorPart + "." + f.FileBuildPart + "." + f.FilePrivatePart; }
+
+        static void Detach() { if (handle != IntPtr.Zero) CloseHandle(handle); handle = IntPtr.Zero; proc = null; layout = null; window = IntPtr.Zero; quartzBase = 0; }
+        static bool Attach() {
+            if (handle != IntPtr.Zero) { try { if (!proc.HasExited) return true; } catch { } Detach(); }
+            if (unchecked(Environment.TickCount - nextTry) < 0) return false;
+            nextTry = Environment.TickCount + 5000;
+            // KuGou runs several processes: the one with the player engine maps both modules
+            foreach (var p in Process.GetProcessesByName("KuGou")) {
+                try {
+                    ProcessModule player = null, main = null, quartz = null;
+                    foreach (ProcessModule m in p.Modules) {
+                        if (string.Equals(m.ModuleName, "kgplayer.dll", StringComparison.OrdinalIgnoreCase)) player = m;
+                        else if (string.Equals(m.ModuleName, "kugou.dll", StringComparison.OrdinalIgnoreCase)) main = m;
+                        else if (string.Equals(m.ModuleName, "quartz.dll", StringComparison.OrdinalIgnoreCase)) quartz = m;
+                    }
+                    if (player == null || main == null) continue;
+                    string pv = Ver(player.FileVersionInfo), mv = Ver(main.FileVersionInfo);
+                    Layout found = null;
+                    foreach (var l in Known)
+                        if (l.Player == pv && l.Main == mv && (l.PlayerSize == 0 || l.PlayerSize == player.ModuleMemorySize) && (l.MainSize == 0 || l.MainSize == main.ModuleMemorySize)) found = l;
+                    Build = found != null ? mv : "unknown " + mv + " / " + pv;
+                    if (found == null) { nextTry = Environment.TickCount + 60000; return false; }   // a build not known: look again in a minute
+                    handle = OpenProcess(0x0010 | 0x0400, false, p.Id);   // VM_READ | QUERY_INFORMATION
+                    if (handle == IntPtr.Zero) return false;
+                    proc = p; layout = found; playerBase = player.BaseAddress.ToInt64(); mainBase = main.BaseAddress.ToInt64();
+                    quartzBase = quartz != null ? quartz.BaseAddress.ToInt64() : 0; quartzSize = quartz != null ? quartz.ModuleMemorySize : 0;
+                    return true;
+                } catch { }
+            }
+            return false;
+        }
+        // The main window's title: "<artist> - <title> - KuGou Music" (in Chinese) (not the desktop lyric's, a tool window, nor a dialog)
+        static string Caption() {
+            var t = new System.Text.StringBuilder(512);
+            int pid;
+            if (window != IntPtr.Zero) {
+                GetWindowThreadProcessId(window, out pid);
+                if (pid == proc.Id && GetWindowTextW(window, t, 512) > 0) return t.ToString();
+                window = IntPtr.Zero;
+            }
+            string found = "";
+            int me = proc.Id;
+            EnumWindows((w, x) => {
+                int q; GetWindowThreadProcessId(w, out q);
+                if (q != me || (GetWindowLongW(w, -20) & 0x80) != 0 || GetWindow(w, 4) != IntPtr.Zero) return true;
+                t.Clear();
+                if (GetWindowTextW(w, t, 512) <= 0 || t.ToString().IndexOf(Name, StringComparison.Ordinal) < 0) return true;
+                window = w; found = t.ToString(); return false;
+            }, IntPtr.Zero);
+            return found;
+        }
+        // "<place ms>|<length ms>|<0 unknown, 1 paused, 2 playing>|<window title>", or null
+        public static string Now() {
+            if (!Attach()) return null;
+            try {
+                var b = new byte[8];
+                if (!Read(playerBase + layout.Pos, b)) { Detach(); return null; }
+                double pos = BitConverter.ToDouble(b, 0);
+                long a = mainBase + layout.DurRoot, p;
+                foreach (var o in layout.DurChain) { if (!I64(a, out p) || p == 0) return null; a = p + o; }
+                int d;
+                if (double.IsNaN(pos) || double.IsInfinity(pos) || pos < 0 || !I32(a, out d) || d <= 0) return null;
+                double dur = (double)d / layout.DurUnits;
+                if (dur > 86400 || pos > dur + 2) return null;
+                if (quartzBase == 0) {   // the graph's module may load only once something plays
+                    proc.Refresh();
+                    foreach (ProcessModule m in proc.Modules)
+                        if (string.Equals(m.ModuleName, "quartz.dll", StringComparison.OrdinalIgnoreCase)) { quartzBase = m.BaseAddress.ToInt64(); quartzSize = m.ModuleMemorySize; }
+                }
+                int state = 0, st;
+                long g = playerBase + layout.Graph, f, vt;
+                bool ok = true;
+                foreach (var o in new long[] { 0xC0, 0xB8 }) { if (!I64(g, out p) || p == 0) { ok = false; break; } g = p + o; }
+                // the graph's filter: its table of methods lies in quartz.dll, or this is not the object it was
+                if (ok && quartzBase != 0 && I64(g, out f) && f != 0 && I64(f, out vt) && vt >= quartzBase && vt < quartzBase + quartzSize
+                    && I32(f + 0x28, out st) && (st == 1 || st == 2)) state = st;
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}|{1}|{2}|{3}",
+                    (long)Math.Round(pos * 1000), (long)Math.Round(dur * 1000), state, Caption());
+            } catch { Detach(); return null; }
+        }
+    }
+
+    // Spotify's main window is titled "<artist> - <title>" while a song plays, and changes the moment the song does.
+    public static class SpotifyWin {
+        public static string Title() {
+            foreach (var p in Process.GetProcessesByName("Spotify")) {
+                try { var t = p.MainWindowTitle; if (!string.IsNullOrEmpty(t)) return t; } catch { } finally { p.Dispose(); }
+            }
+            return null;
         }
     }
 }
@@ -315,11 +456,69 @@ New-Item -ItemType Directory -Force -Path $CoverDir | Out-Null
 $exeCache = @{}
 function ExeOf($app) {
     if (-not $app) { return $null }
-    if (-not $exeCache.ContainsKey($app)) {
-        $name = [IO.Path]::GetFileNameWithoutExtension(($app -split '!')[0])
-        $exeCache[$app] = (Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1).Path
+    if ($app.Contains('!')) { return "shell:AppsFolder\$app" }
+    $c = $exeCache[$app]
+    if (-not $c -or (-not $c.path -and $clock.ElapsedMilliseconds - $c.at -gt 60000)) {
+        $name = [IO.Path]::GetFileNameWithoutExtension($app)
+        $path = (Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1).Path
+        $c = @{ path = $path; at = $clock.ElapsedMilliseconds }
+        $exeCache[$app] = $c
     }
-    $exeCache[$app]
+    $c.path
+}
+# KuGou's place in the song, read from its memory ([DshMusic.KuGou]); $null when this build is not known. The place is
+# sent again only when it moved otherwise than the clock (a jump, a pause): the anchor counts those. Just after a song
+# change KuGou can still hold the last song's place for a moment: for 1.5 s a place past 3 s counts as the start.
+$kgLast = $null; $kgAnchor = 0; $kgSince = 0; $kgBuild = ''; $kgHold = ''; $kgHoldSince = 0
+function KuGouNow($title, [bool]$newTrack) {
+    $r = [DshMusic.KuGou]::Now()
+    if ([DshMusic.KuGou]::Build -ne $script:kgBuild) { $script:kgBuild = [DshMusic.KuGou]::Build; Emit @{ t = 'log'; m = "KuGou build $($script:kgBuild)" } }
+    if (-not $r) { $script:kgLast = $null; return $null }
+    $f = $r -split '\|', 4
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $state = switch ($f[2]) { '2' { 'Playing' } '1' { 'Paused' } default { $null } }
+    if (-not $state) { $state = [string]$script:session.GetPlaybackInfo().PlaybackStatus }
+    $pos = [long]$f[0]; $dur = [long]$f[1]
+    if ($newTrack -and $script:trackKey -and -not $script:kgSince) { $script:kgSince = $now }   # from the first sight of the new song
+    if ($script:kgSince) { if ($now - $script:kgSince -lt 1500) { if ($pos -gt 3000) { $pos = 0 } } else { $script:kgSince = 0 } }
+    $l = $script:kgLast
+    $expect = if ($l) { $l.pos + $(if ($l.status -eq 'Playing') { $now - $l.at } else { 0 }) } else { 0 }
+    if (-not $l -or $l.status -ne $state -or $l.dur -ne $dur -or [Math]::Abs($pos - $expect) -gt 1200) {
+        $script:kgAnchor++
+        $script:kgLast = @{ pos = $pos; at = $now; status = $state; dur = $dur }
+    }
+    # the title reads "<artist> - <title> - <KuGou Music in Chinese>"
+    $artist = $null
+    $cap = $f[3].Trim() -replace "\s*-\s*$([DshMusic.KuGou]::Name)`$", ''
+    if ($title -and $cap.EndsWith(" - $title")) { $artist = $cap.Substring(0, $cap.Length - $title.Length - 3).Trim() }
+    $k = $script:kgLast
+    @{ status = $state; dur = $dur; pos = $k.pos; at = $k.at; anchor = "kg$($script:kgAnchor)"; artist = $artist }
+}
+# Spotify tells Windows a new song's name only once its artwork is in: seconds after the song started (5 to 13 s seen on
+# this machine), its length and place already the new song's; skipping on quickly, a late name can even come after the
+# next song's. Its window's title ("<artist> - <title>") changes as the
+# song does, so until Windows has the new name the song is named from the window, and its artwork (still the last
+# song's in Windows) is not taken. The artist so named stays for the whole song: once Windows has caught up, and when the
+# window shows no song (paused: "Spotify Premium", an ad, closed to the tray), the song keeps the name it had.
+$spEarly = $null   # @{ title; artist; stale = the name Windows still had then }
+function SpotifyNames($t, $a, $al) {
+    $win = [DshMusic.SpotifyWin]::Title()
+    $i = if ($win) { $win.IndexOf(' - ') } else { -1 }
+    if ($i -gt 0 -and $win -ne "$a - $t" -and -not ($t -and $win.EndsWith(" - $t"))) {
+        $wt = $win.Substring($i + 3); $wa = $win.Substring(0, $i)
+        if (-not $script:spEarly -or $script:spEarly.title -ne $wt -or $script:spEarly.artist -ne $wa) {
+            $script:spEarly = @{ title = $wt; artist = $wa; stale = $t }
+        }
+    }
+    $e = $script:spEarly
+    if ($e) {
+        if ($e.stale -eq $t -and $e.title -ne $t) {   # Windows still on the last song
+            return @{ early = $true; title = $e.title; artist = $e.artist; album = '' }
+        }
+        if ($e.title -eq $t) { return @{ early = $false; title = $t; artist = $e.artist; album = $al } }   # caught up
+        $script:spEarly = $null
+    }
+    @{ early = $false; title = $t; artist = $a; album = $al }
 }
 function PollMedia {
     $script:session = PickSession
@@ -338,20 +537,38 @@ function PollMedia {
     $shuffle = if ($ctl.IsShuffleEnabled -and $null -ne $info.IsShuffleActive) { [bool]$info.IsShuffleActive } else { $null }
     $repeat = if ($ctl.IsRepeatEnabled -and $null -ne $info.AutoRepeatMode) { [string]$info.AutoRepeatMode } else { $null }
     $can = "$([bool]$ctl.IsNextEnabled)|$([bool]$ctl.IsPreviousEnabled)|$([bool]$ctl.IsPlaybackPositionEnabled)|$shuffle|$repeat"
-    $track = "$($s.SourceAppUserModelId)|$($p.Title)|$($p.Artist)|$($p.AlbumTitle)"
-    $key = "$track|$status|$($tl.LastUpdatedTime.Ticks)|$($tl.EndTime.Ticks)|$can"
-    if ($track -ne $script:trackKey) { $script:trackKey = $track; $script:coverTries = 4; $script:coverHash = '' }
+    $title = [string]$p.Title; $artist = $p.Artist; $album = $p.AlbumTitle; $early = $false
+    if ($s.SourceAppUserModelId -match 'spotify') {
+        $n = SpotifyNames $title ([string]$artist) ([string]$album)
+        $early = $n.early; $title = $n.title; $artist = $n.artist; $album = $n.album
+    }
+    $track = "$($s.SourceAppUserModelId)|$title|$artist|$album"
+    $dur = [long]$tl.EndTime.TotalMilliseconds; $pos = [long]$tl.Position.TotalMilliseconds
+    $at = $tl.LastUpdatedTime.ToUnixTimeMilliseconds(); $stamp = $tl.LastUpdatedTime.Ticks
+    $newTrack = $track -ne $script:trackKey
+    if ($s.SourceAppUserModelId -match 'kugou') {
+        $kg = KuGouNow $p.Title $newTrack
+        if ($kg) { $status = $kg.status; $dur = $kg.dur; $pos = $kg.pos; $at = $kg.at; $stamp = $kg.anchor; if (-not $artist) { $artist = $kg.artist } }
+        # A new song is sent once KuGou's window names it too (its artist comes from there), or after 1.5 s without:
+        # sent first without the artist, it would come again with it, as another song.
+        if ($kg -and -not $artist -and $newTrack -and $script:trackKey) {
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            if ($script:kgHold -ne $track) { $script:kgHold = $track; $script:kgHoldSince = $now }
+            if ($now - $script:kgHoldSince -lt 1500) { return }
+        }
+    }
+    $key = "$track|$status|$stamp|$dur|$can"
+    if ($newTrack) { $script:trackKey = $track; $script:coverTries = 4; $script:coverHash = '' }
     if ($key -ne $script:mediaKey) {
         $script:mediaKey = $key
         Emit @{
-            t = 'media'; app = $s.SourceAppUserModelId; exe = ExeOf $s.SourceAppUserModelId; title = $p.Title; artist = $p.Artist; album = $p.AlbumTitle
-            status = $status; dur = [long]$tl.EndTime.TotalMilliseconds; pos = [long]$tl.Position.TotalMilliseconds
-            at = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
+            t = 'media'; app = $s.SourceAppUserModelId; exe = ExeOf $s.SourceAppUserModelId; title = $title; artist = $artist; album = $album
+            status = $status; dur = $dur; pos = $pos; at = $at
             next = [bool]$ctl.IsNextEnabled; prev = [bool]$ctl.IsPreviousEnabled; seek = [bool]$ctl.IsPlaybackPositionEnabled; shuffle = $shuffle; repeat = $repeat
         }
     }
     # Players often publish the artwork a moment after the title, so look a few times after a track change.
-    if ($script:coverTries -gt 0 -and $p.Thumbnail) {
+    if (-not $early -and $script:coverTries -gt 0 -and $p.Thumbnail) {
         $script:coverTries--
         $rs = Await ($p.Thumbnail.OpenReadAsync()) $streamType
         # PowerShell does not see the stream's own members, so convert it through reflection (the cast happens at run time).

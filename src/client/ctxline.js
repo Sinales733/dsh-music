@@ -49,6 +49,8 @@ function createContextLine(reduced, { pct: carriedPct } = {}) {
     dock.setAttribute('data-dshmu-measure', '');
     try {
       const o = root.getBoundingClientRect(), c = card.getBoundingClientRect(), r = ring.getBoundingClientRect();
+      // the line is drawn in the root's own px: a scaled copy (the settings page's preview) measures smaller on screen
+      const k = root.offsetWidth && Math.abs(o.width / root.offsetWidth - 1) > 0.02 ? o.width / root.offsetWidth : 1;
       let left = Infinity, right = -Infinity;
       for (const e of dock.querySelectorAll(':scope > :not([data-slot]), :scope > [data-slot] > :not(.dshmu-strip)')) {
         const b = e.getBoundingClientRect();
@@ -56,8 +58,8 @@ function createContextLine(reduced, { pct: carriedPct } = {}) {
       }
       if (!r.width || right <= left) return null;
       const L = right - left;
-      return { cx: r.left + r.width / 2 - o.left, cy: r.top + r.height / 2 - o.top, x0: c.left + c.width / 2 - L / 2 - o.left,
-        y: c.bottom - o.top, L, pct: Math.max(0, Math.min(1, pct / 100)) };
+      return { cx: (r.left + r.width / 2 - o.left) / k, cy: (r.top + r.height / 2 - o.top) / k, x0: (c.left + c.width / 2 - L / 2 - o.left) / k,
+        y: (c.bottom - o.top) / k, L: L / k, pct: Math.max(0, Math.min(1, pct / 100)) };
     } finally { dock.removeAttribute('data-dshmu-measure'); }
   }
 
@@ -151,7 +153,7 @@ function createContextLine(reduced, { pct: carriedPct } = {}) {
       if (ln.want !== undefined && Math.abs(ln.want - ln.g.pct) > 0.0005) {
         const k = reduced.matches ? 1 : 1 - Math.exp(-(now - (ln.last ?? now)) / 90);
         ln.g = { ...ln.g, pct: ln.g.pct + (ln.want - ln.g.pct) * k };
-        if (Math.abs(ln.want - ln.g.pct) <= 0.0005) ln.g.pct = ln.want;
+        if (Math.abs(ln.want - ln.g.pct) <= 0.0005) ln.g = { ...ln.g, pct: ln.want };
       }
       lastPct = ln.g.pct;
     }
@@ -171,7 +173,7 @@ function createContextLine(reduced, { pct: carriedPct } = {}) {
       ln.svg.remove();
       dock.removeAttribute('data-dshmu-ctx');
     }
-    draw(ln);
+    if (ln.t !== ln.drawnT || ln.g !== ln.drawnG) { draw(ln); ln.drawnT = ln.t; ln.drawnG = ln.g; }
     return ln.t !== ln.target || (ln.t === 1 && ln.want !== undefined && ln.want !== ln.g.pct);
   }
 

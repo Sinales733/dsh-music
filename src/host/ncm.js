@@ -11,7 +11,6 @@ import path from 'node:path';
 
 const LOG = path.join(process.env.LOCALAPPDATA ?? '', 'NetEase', 'CloudMusic', 'cloudmusic.elog');
 const TABLE = Uint8Array.from({ length: 256 }, (_, i) => ((i >> 4) ^ 3) | ((((i >> 4) ^ 8 ^ (i & 15)) << 4) & 255));
-const decode = (buf) => new TextDecoder().decode(buf.map((b) => TABLE[b]));
 const LINE = /:(\d+):INFO:[^\]]*\] .*?【(曙光点位|playing)】,(.*)$/;
 
 /** The JSON object at the start of s: some lines carry more comma-separated values after it. */
@@ -30,6 +29,10 @@ function firstObject(s) {
 /** createNcmClock(onChange) ->{ now(): {id, name, dur, pos, at, playing} | null, dispose() } */
 export function createNcmClock(onChange, { file = LOG, pollMs = 500 } = {}) {
   let st = null, size = 0, rest = '', timer = 0;
+  // One decoder kept across reads: a read can end inside a character (a song name in Chinese), whose other bytes come
+  // with the next read.
+  let decoder = new TextDecoder();
+  const decode = (buf) => decoder.decode(buf.map((b) => TABLE[b]), { stream: true });
   const names = new Map();          // song id -> name, from the line before each start
   // A tick in the log is GetTickCount; os.uptime() is the same clock, so the gap to now gives the wall time.
   const wall = (tick) => Date.now() - (os.uptime() * 1000 - tick);
@@ -81,7 +84,7 @@ export function createNcmClock(onChange, { file = LOG, pollMs = 500 } = {}) {
   function poll() {
     try {
       const now = fs.statSync(file).size;
-      if (now < size) { size = 0; rest = ''; }                   // log rotated: start over from its beginning
+      if (now < size) { size = 0; rest = ''; decoder = new TextDecoder(); }   // log rotated: start over from its beginning
       const changed = read(size, now);
       size = now;
       if (changed) onChange?.();

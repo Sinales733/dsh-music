@@ -13,8 +13,8 @@ const TAIL_KIND = 'rotate', TAIL_SWAY = 'whip';   // the three fluke moves in tu
 const BEAT_LATENCY = 0.08;          // seconds from a kick in the speakers to its event reaching the page
 const TAIL_K = 1.75, TAIL_BOX = 10, TAIL_SIZE = 48;   // dsh-motion's canvas geometry (viewBox unit = 1.75 px)
 const TAIL_CSS = `
-[data-chat-running] [class*="runningIcon"].dshmu-tail { overflow: visible !important; contain: none !important; }
-[data-chat-running] [class*="runningIcon"].dshmu-tail > [class*="runningWhale"] { display: none !important; }
+[data-chat-running] [class*="runningIcon"].dshmu-tail, [data-dshmu-pv-running] [class*="runningIcon"].dshmu-tail { overflow: visible !important; contain: none !important; }
+[data-chat-running] [class*="runningIcon"].dshmu-tail > [class*="runningWhale"], [data-dshmu-pv-running] [class*="runningIcon"].dshmu-tail > [class*="runningWhale"] { display: none !important; }
 .dshmu-whale { position: absolute; left: -35.7143%; top: -35.7143%; width: 171.4286%; height: 171.4286%; pointer-events: none; }
 `;
 
@@ -96,7 +96,7 @@ function createTail(wanted, mood = () => null, carried = null) {
     raf = 0;
     const dt = last ? Math.min(0.1, (t - last) / 1000) : 0;
     last = t;
-    const hosts = [...document.querySelectorAll('[data-chat-running] [class*="runningIcon"]')]
+    const hosts = [...document.querySelectorAll(':is([data-chat-running], [data-dshmu-pv-running]) [class*="runningIcon"]')]
       .filter((h) => !h.querySelector('.dshm-whale'));          // dsh-motion draws this one; it asks us as its guest
     const active = own.size > 0 || (hosts.length && guest.wants());
     const fr = active ? frame(dt) : null;
