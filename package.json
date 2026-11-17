@@ -1,7 +1,7 @@
 {
   "name": "dsh-whale-music",
   "description": "Your own music, in step with the AI: lyrics in the running indicator, volume that steps back while the AI waits for you",
-  "version": "0.2.0-beta.0",
+  "version": "0.2.0",
   "icon": "./icon.svg",
   "type": "module",
   "main": "lib/index.js",
